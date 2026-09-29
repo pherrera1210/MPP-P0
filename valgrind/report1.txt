@@ -1,0 +1,171 @@
+==41214== Memcheck, a memory error detector
+==41214== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==41214== Using Valgrind-3.26.0 and LibVEX; rerun with -h for copyright info
+==41214== Command: ./sec 10 4 2 1
+==41214== Parent PID: 9450
+==41214== 
+==41214== Invalid write of size 8
+==41214==    at 0x48F4196: __vfscanf_internal (vfscanf-internal.c:2611)
+==41214==    by 0x48E0E55: __isoc99_scanf (isoc99_scanf.c:30)
+==41214==    by 0x40015C9: read_distances (io.c:20)
+==41214==    by 0x4001316: main (main.c:34)
+==41214==  Address 0x4aa10f0 is 176 bytes inside a block of size 180 alloc'd
+==41214==    at 0x4850858: malloc (vg_replace_malloc.c:447)
+==41214==    by 0x400157D: read_distances (io.c:14)
+==41214==    by 0x4001316: main (main.c:34)
+==41214== 
+==41214== Invalid read of size 4
+==41214==    at 0x4001720: printf (stdio2.h:118)
+==41214==    by 0x4001720: print_solution (io.c:46)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214==  Address 0x4aa2180 is 0 bytes inside a block of size 16 free'd
+==41214==    at 0x48538BF: free (vg_replace_malloc.c:990)
+==41214==    by 0x40013CF: main (main.c:56)
+==41214==  Block was alloc'd at
+==41214==    at 0x4850858: malloc (vg_replace_malloc.c:447)
+==41214==    by 0x4001325: main (main.c:41)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E2141: __printf_fp_buffer_1.isra.0 (printf_fp.c:230)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E215B: __printf_fp_buffer_1.isra.0 (printf_fp.c:230)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48DBB03: __mpn_extract_double (dbl2mpn.c:56)
+==41214==    by 0x48E29E7: __printf_fp_buffer_1.isra.0 (printf_fp.c:230)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48DBB08: __mpn_extract_double (dbl2mpn.c:60)
+==41214==    by 0x48E29E7: __printf_fp_buffer_1.isra.0 (printf_fp.c:230)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E29B4: __printf_fp_buffer_1.isra.0 (printf_fp.c:794)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E2BEC: __printf_fp_buffer_1.isra.0 (printf_fp.c:805)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E2C1B: __printf_fp_buffer_1.isra.0 (printf_fp.c:808)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E2C59: __printf_fp_buffer_1.isra.0 (printf_fp.c:818)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E3085: round_away (rounding-mode.h:52)
+==41214==    by 0x48E3085: __printf_fp_buffer_1.isra.0 (printf_fp.c:825)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Conditional jump or move depends on uninitialised value(s)
+==41214==    at 0x48E2DF3: __printf_fp_buffer_1.isra.0 (printf_fp.c:987)
+==41214==    by 0x48E4572: __printf_fp_l_buffer (printf_fp.c:1122)
+==41214==    by 0x48EC33C: __printf_fp_spec (vfprintf-internal.c:266)
+==41214==    by 0x48EC33C: __printf_buffer (vfprintf-internal.c:998)
+==41214==    by 0x48ED767: __vfprintf_internal (vfprintf-internal.c:1548)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214== 
+==41214== Syscall param write(buf) points to uninitialised byte(s)
+==41214==    at 0x49A5C2D: write (write.c:26)
+==41214==    by 0x4918104: _IO_file_write@@GLIBC_2.2.5 (fileops.c:1241)
+==41214==    by 0x4916BAF: new_do_write (fileops.c:483)
+==41214==    by 0x4916BAF: _IO_do_write@@GLIBC_2.2.5 (fileops.c:460)
+==41214==    by 0x4918232: _IO_new_file_xsputn (fileops.c:1305)
+==41214==    by 0x4918232: _IO_file_xsputn@@GLIBC_2.2.5 (fileops.c:1258)
+==41214==    by 0x48E1C8D: __printf_buffer_flush_to_file (printf_buffer_to_file.c:59)
+==41214==    by 0x48E1C8D: __printf_buffer_to_file_done (printf_buffer_to_file.c:120)
+==41214==    by 0x48ED773: __vfprintf_internal (vfprintf-internal.c:1549)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013E2: main (main.c:59)
+==41214==  Address 0x4aa22e1 is 33 bytes inside a block of size 1,024 alloc'd
+==41214==    at 0x4850858: malloc (vg_replace_malloc.c:447)
+==41214==    by 0x4908A0B: _IO_file_doallocate (filedoalloc.c:91)
+==41214==    by 0x4919F85: _IO_doallocbuf (genops.c:373)
+==41214==    by 0x4917638: _IO_file_overflow@@GLIBC_2.2.5 (fileops.c:779)
+==41214==    by 0x4918232: _IO_new_file_xsputn (fileops.c:1305)
+==41214==    by 0x4918232: _IO_file_xsputn@@GLIBC_2.2.5 (fileops.c:1258)
+==41214==    by 0x48E1C8D: __printf_buffer_flush_to_file (printf_buffer_to_file.c:59)
+==41214==    by 0x48E1C8D: __printf_buffer_to_file_done (printf_buffer_to_file.c:120)
+==41214==    by 0x48ED773: __vfprintf_internal (vfprintf-internal.c:1549)
+==41214==    by 0x49C1D7C: __printf_chk (printf_chk.c:33)
+==41214==    by 0x40013C7: printf (stdio2.h:118)
+==41214==    by 0x40013C7: main (main.c:52)
+==41214== 
+==41214== 
+==41214== HEAP SUMMARY:
+==41214==     in use at exit: 212 bytes in 3 blocks
+==41214==   total heap usage: 7 allocs, 4 frees, 5,356 bytes allocated
+==41214== 
+==41214== 32 (16 direct, 16 indirect) bytes in 1 blocks are definitely lost in loss record 2 of 3
+==41214==    at 0x4850858: malloc (vg_replace_malloc.c:447)
+==41214==    by 0x400197D: aplicar_mh (mh.c:72)
+==41214==    by 0x4001373: main (main.c:48)
+==41214== 
+==41214== 180 bytes in 1 blocks are definitely lost in loss record 3 of 3
+==41214==    at 0x4850858: malloc (vg_replace_malloc.c:447)
+==41214==    by 0x400157D: read_distances (io.c:14)
+==41214==    by 0x4001316: main (main.c:34)
+==41214== 
+==41214== LEAK SUMMARY:
+==41214==    definitely lost: 196 bytes in 2 blocks
+==41214==    indirectly lost: 16 bytes in 1 blocks
+==41214==      possibly lost: 0 bytes in 0 blocks
+==41214==    still reachable: 0 bytes in 0 blocks
+==41214==         suppressed: 0 bytes in 0 blocks
+==41214== 
+==41214== Use --track-origins=yes to see where uninitialised values come from
+==41214== For lists of detected and suppressed errors, rerun with: -s
+==41214== ERROR SUMMARY: 30 errors from 15 contexts (suppressed: 0 from 0)

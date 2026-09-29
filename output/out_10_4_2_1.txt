@@ -1,0 +1,8 @@
+Execution Time: 0.00 sec
+
+Solution: -1055750688 24723 -1834795128 -1730292732 0 
+Distance: 0.00
+Execution Time: 0.00 sec
+
+Solution: 585390437 24608 -1185192202 918557160 0 
+Distance: 0.00
