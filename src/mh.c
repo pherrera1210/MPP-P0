@@ -133,24 +133,75 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
 {
 	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
-	
+	int corte = 1 + aleatorio(m - 1);
+
 	// Los primeros genes del padre1 van al hijo1. Idem para el padre2 e hijo2.
-	
+	for (int i = 0; i < corte; i++) {
+        hijo1->array_int[i] = padre1->array_int[i];
+        hijo2->array_int[i] = padre2->array_int[i];
+    }
+
 	// Y los restantes son del otro padre, respectivamente.
+	for (int i = corte; i < m; i++) {
+        hijo1->array_int[i] = padre2->array_int[i];
+        hijo2->array_int[i] = padre1->array_int[i];
+    }
 	
 	// Factibilizar: eliminar posibles repetidos de ambos hijos
 	// Si encuentro alguno repetido en el hijo1, lo cambio por otro que no este en el conjunto
+	
+	// Primero, recorro el hijo1 desde el corte hasta el final, 
+	// y si encuentro un elemento que ya estaba en la primera parte del hijo1, 
+	// lo reemplazo por un valor aleatorio que no esté en el hijo1.
+	for (int i = corte; i < m; i++) {
+        // Si el elemento proveniente del padre2 ya existe en el segmento izquierdo de hijo1
+        if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
+            int nuevo_val;
+            // Busca un valor aleatorio de [0, n-1] que no esté en hijo1
+            do {
+                nuevo_val = aleatorio(n);
+            } while (find_element(hijo1->array_int, i, nuevo_val));
+            hijo1->array_int[i] = nuevo_val;
+        }
+    }
+
+	// Luego lo mismo, pero para el hijo2
+	for (int i = corte; i < m; i++) {
+        // Si el elemento proveniente del padre1 ya existe en el segmento izquierdo de hijo2
+        if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
+            int nuevo_val;
+            // Busca un valor aleatorio de [0, n-1] que no esté en hijo2
+            do {
+                nuevo_val = aleatorio(n);
+            } while (find_element(hijo2->array_int, i, nuevo_val));
+            hijo2->array_int[i] = nuevo_val;
+        }
+    }
 }
 
 void mutar(Individuo *actual, int n, int m)
 {
 	// Decidir cuantos elementos mutar:
 	// Si el valor es demasiado pequeño la convergencia es muy pequeña y si es demasiado alto diverge
+	int num_mutaciones = (int)(m * MUTATION_RATE);
+    if (num_mutaciones < 1) num_mutaciones = 1; // Al menos 1 mutación por individuo
 	
 	// Cambia el valor de algunos elementos de array_int de forma aleatoria
 	// teniendo en cuenta que no puede haber elementos repetidos:
         // una posibilidad podría ser usar una variable, m_rate, para establecer la intensidad de la mutación 
         // (un bucle for con un número de iteraciones que dependa, por ejemplo, de m_rate*m)
+	for (int k = 0; k < num_mutaciones; k++) {
+        // Selecciona una posición aleatoria para alterar
+        int pos = aleatorio(m);
+        int nuevo_val;
+        
+        // Genera un valor aleatorio que no esté repetido en el individuo
+        do {
+            nuevo_val = aleatorio(n);
+        } while (find_element(actual->array_int, m, nuevo_val));
+        
+        actual->array_int[pos] = nuevo_val;
+    }
 }
 
 double distancia_ij(const double *d, int i, int j, int n)
