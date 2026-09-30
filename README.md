@@ -2,7 +2,7 @@
 
 Este repositorio tiene como propósito coordinar el desarrolo de la **Práctica 0** de la asignatura **Metodología de la Programación Paralela**.
 
-## Alumnoa
+## Alumnos
 
 Trabajo realizado en pareja por los alumnos:
 
