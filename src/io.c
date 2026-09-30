@@ -43,6 +43,6 @@ void print_distances(double *d, int n)
 void print_solution(int n, int m, const int *solucion, double valor)
 {
 	printf("\nSolution: ");
-	for(int i = 0; i <= m; i++) { printf("%d ", solucion[i]); }
+	for(int i = 0; i < m; i++) { printf("%d ", solucion[i]); }
 	printf("\nDistance: %.2lf\n", valor);
 }

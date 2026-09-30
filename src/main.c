@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 		printf("Execution Time: %.2lf sec\n", (tf - ti)/1000);
 	#endif
 	
-
+	
 	#ifdef DEBUG
 		print_solution(n, m, sol, value);
 	#endif
@@ -60,8 +60,7 @@ int main(int argc, char **argv)
 	//	Free Allocated Memory	
 	free(sol);
 
-	// Liberamos la matrix 'd'
 	free(d);
-	
+
 	return(EXIT_SUCCESS);
 }

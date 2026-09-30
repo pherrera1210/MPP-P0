@@ -118,6 +118,11 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 	// almacena el mejor valor obtenido para el fitness
 	double value = poblacion[0]->fitness;
 	
+	// Liberamos los punteros y sus arrays
+    for(i = 0; i < tam_pob; i++) {
+        free(poblacion[i]->array_int);
+        free(poblacion[i]);
+	}
 	// se libera la memoria reservada
 	free(poblacion);
 	
