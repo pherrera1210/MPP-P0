@@ -7,6 +7,6 @@
 	} Individuo;
 	
 	void cruzar(Individuo *, Individuo *, Individuo *, Individuo *, int, int);
-	void mutar(Individuo *, int, int);
+	void mutar(Individuo *, int, int, double);
 	void fitness(const double *, Individuo *, int, int);
 #endif
