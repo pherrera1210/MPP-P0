@@ -7,8 +7,9 @@
 
 #include "../include/mh.h"
 
-#define MUTATION_RATE 0.15
 #define PRINT 0
+#define PORCENTAJE_CONVERGENCIA 0.05
+#define MAX_ITER_SIN_MEJORA 5
 
 int aleatorio(int n) {
 	return (rand() % n);  // genera un numero aleatorio entre 0 y n-1
@@ -57,7 +58,7 @@ int comp_fitness(const void *a, const void *b) {
 	return (*(Individuo **)b)->fitness - (*(Individuo **)a)->fitness;
 }
 
-double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *sol)
+double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double m_rate, int *sol)
 {
         // para reiniciar la secuencia pseudoaleatoria en cada ejecución
         srand(time(NULL) + getpid());
@@ -79,6 +80,10 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
 	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
 	
+	// Variables para el criterio de convergencia
+	double mejor_fitness_previo = poblacion[0]->fitness;
+	int iter_sin_mejora = 0;
+	
 	// evoluciona la poblacion durante un numero de generaciones
 	for(g = 0; g < n_gen; g++)
 	{
@@ -92,7 +97,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 		
 		// muta 3/4 partes de la poblacion
 		for(i = mutation_start; i < tam_pob; i++) {
-			mutar(poblacion[i], n, m);
+			mutar(poblacion[i], n, m, m_rate);
 		}
 		
 		// recalcula el fitness del individuo
@@ -106,6 +111,23 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 		if (PRINT) {
 			printf("Generacion %d - ", g);
 			printf("Fitness = %.0lf\n", poblacion[0]->fitness);
+		}
+		
+		// Criterio de convergencia
+		double fitness_actual = poblacion[0]->fitness;
+		double mejora_minima = mejor_fitness_previo * PORCENTAJE_CONVERGENCIA;
+		
+		// Si el fitness ha mejorado más del porcentaje mínimo exigido, actualizamos
+		if (fitness_actual >= (mejor_fitness_previo + mejora_minima)) {
+			mejor_fitness_previo = fitness_actual;
+			iter_sin_mejora = 0; // Reiniciamos el contador
+		} else {
+			iter_sin_mejora++;
+		}
+		
+		// Si superamos las iteraciones permitidas sin mejora, paramos
+		if (iter_sin_mejora >= MAX_ITER_SIN_MEJORA) {
+			break;
 		}
 	}
 	
@@ -133,33 +155,96 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, int *so
 void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
 {
 	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
+	int corte = 1 + aleatorio(m-1);
 	
 	// Los primeros genes del padre1 van al hijo1. Idem para el padre2 e hijo2.
+	for (int i=0; i<corte; i++) {
+		hijo1->array_int[i] = padre1->array_int[i];
+		hijo2->array_int[i] = padre2->array_int[i];
+	}
 	
 	// Y los restantes son del otro padre, respectivamente.
+	for (int i=corte; i<m; i++) {
+		hijo1->array_int[i] = padre2->array_int[i];
+		hijo2->array_int[i] = padre1->array_int[i];
+	}
 	
 	// Factibilizar: eliminar posibles repetidos de ambos hijos
-	// Si encuentro alguno repetido en el hijo1, lo cambio por otro que no este en el conjunto
+	// Hijo 1: reemplazamos duplicados comprobando desde el inicio hasta la posición actual i
+	for (int i=corte; i<m; i++) {
+		if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
+			int nuevo_val;
+			do {
+				nuevo_val = aleatorio(n);
+			} while (find_element(hijo1->array_int, i, nuevo_val));
+			hijo1->array_int[i] = nuevo_val;
+		}
+	}
+	
+	// Hijo 2:
+	for (int i=corte; i<m; i++) {
+		if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
+			int nuevo_val;
+			do {
+				nuevo_val = aleatorio(n);
+			} while (find_element(hijo2->array_int, i, nuevo_val));
+			hijo2->array_int[i] = nuevo_val;
+		}
+	}
 }
 
-void mutar(Individuo *actual, int n, int m)
+void mutar(Individuo *actual, int n, int m, double m_rate)
 {
 	// Decidir cuantos elementos mutar:
 	// Si el valor es demasiado pequeño la convergencia es muy pequeña y si es demasiado alto diverge
+	int num_mutaciones = (int)(m*m_rate);
+	if (num_mutaciones < 1) num_mutaciones = 1; 
 	
-	// Cambia el valor de algunos elementos de array_int de forma aleatoria
-	// teniendo en cuenta que no puede haber elementos repetidos:
-        // una posibilidad podría ser usar una variable, m_rate, para establecer la intensidad de la mutación 
-        // (un bucle for con un número de iteraciones que dependa, por ejemplo, de m_rate*m)
+	// Cambia el valor de algunos elementos del array_int de forma aleatoria
+	for (int k=0; k<num_mutaciones; k++) {
+		int pos = aleatorio(m);
+		int nuevo_val;
+		
+		do {
+			nuevo_val = aleatorio(n);
+		} while (find_element(actual->array_int, m, nuevo_val));
+		
+		actual->array_int[pos] = nuevo_val;
+	}
 }
 
 double distancia_ij(const double *d, int i, int j, int n)
 {
         // Devuelve la distancia entre dos elementos i, j de la matriz 'd'
+        // Como existe simetría aseguramos que i < j
+        if (i == j) return 0;
+        if (i > j) {
+        	int temp = i;
+        	i = j;
+        	j = temp;
+        }
+        
+        // Aplicamos la fórmula k = f (i, j, n)
+        int k = ((n*n-n)/2) - (((n-i) * (n-i) - (n-i)) / 2) + j - i - 1;
+        
+        return d[k];
 }
 
 
 void fitness(const double *d, Individuo *individuo, int n, int m)
 {
 	// Determina la calidad del individuo calculando la suma de la distancia entre cada par de enteros
+	double suma_distancias = 0.0;
+	
+	// Doble bucle para recorrer todos los pares de elementos seleccionados
+	for (int i=0; i<m-1; i++) {
+		for (int j=i+1; j<m; j++) {
+			int elem1 = individuo->array_int[i];
+			int elem2 = individuo->array_int[j];
+			suma_distancias += distancia_ij(d, elem1, elem2, n);
+		}
+	}
+	
+	// Asignamos el valor objetivo maximizado al fitness del individuo
+	individuo->fitness = suma_distancias;
 }
