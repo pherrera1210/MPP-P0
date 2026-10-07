@@ -1,6 +1,6 @@
-# Práctica 0 - Metodología de la Programación Paralela (MPP)
+# Práctica de Metodología de la Programación Paralela (MPP)
 
-Este repositorio tiene como propósito coordinar el desarrolo de la **Práctica 0** de la asignatura **Metodología de la Programación Paralela**.
+Este repositorio tiene como propósito coordinar el desarrolo de las **Prácticas 0, 1, 2, 3 y 4** de la asignatura **Metodología de la Programación Paralela**.
 
 ## Alumnos
 
