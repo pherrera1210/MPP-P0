@@ -4,15 +4,20 @@
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
+#include <omp.h>
 
 #include "../include/mh.h"
 
+unsigned int seed;
+#pragma omp threadprivate(seed)
+
 #define PRINT 0
-#define PORCENTAJE_CONVERGENCIA 0.05
-#define MAX_ITER_SIN_MEJORA 5
+#define PORCENTAJE_CONVERGENCIA 0.10
+#define MAX_ITER_SIN_MEJORA 20
+
 
 int aleatorio(int n) {
-	return (rand() % n);  // genera un numero aleatorio entre 0 y n-1
+	return (rand_r(&seed) % n);  // genera un numero aleatorio entre 0 y n-1
 }
 
 int find_element(int *array, int end, int element)
@@ -60,13 +65,21 @@ int comp_fitness(const void *a, const void *b) {
 
 double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double m_rate, int *sol)
 {
-        // para reiniciar la secuencia pseudoaleatoria en cada ejecución
-        srand(time(NULL) + getpid());
 	int i, g, mutation_start;
 	
 	// crea poblacion inicial (array de individuos)
 	Individuo **poblacion = (Individuo **) malloc(tam_pob * sizeof(Individuo *));
 	assert(poblacion);
+
+	// Desactiva ajuste dinámico de hilos
+	omp_set_dynamic(0);
+
+	// Primera región paralela
+	#pragma omp parallel
+	{
+		// Combinamos el tiempo actual con el ID del hilo para tener semillas únicas
+		seed = time(NULL) ^ omp_get_thread_num();
+	}
 	
 	// crea cada individuo (array de enteros aleatorios)
 	for(i = 0; i < tam_pob; i++) {
@@ -248,3 +261,92 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	// Asignamos el valor objetivo maximizado al fitness del individuo
 	individuo->fitness = suma_distancias;
 }
+
+// VERSIONES FUNCIÓN FITNESS
+
+
+// 1. Utilizando el constructor critical
+/*
+void fitness(const double *d, Individuo *individuo, int n, int m)
+{
+	double suma_distancias = 0.0;
+
+	#pragma omp parallel shared(d, individuo, n, m, suma_distancias)
+	{
+		double suma_local = 0.0; // Variable privada al declararse dentro de la región paralela
+		int i, j, elem1, elem2;
+
+		#pragma omp for
+		for (i=0; i<m-1; i++) {
+			for (j=i+1; j<m; j++) {
+				elem1 = individuo->array_int[i];
+				elem2 = individuo->array_int[j];
+				suma_distancias += distancia_ij(d, elem1, elem2, n);
+			}
+		}
+
+		// Bloqueo solo una vez por hilo al final
+		#pragma omp critical
+		{
+			suma_distancias += suma_local;
+		}
+	}
+
+	individuo->fitness = suma_distancias;
+}
+
+
+
+// 2. Utilizando el constructor atomic
+
+void fitness(const double *d, Individuo *individuo, int n, int m)
+{
+	double suma_distancias = 0.0;
+
+	#pragma omp parallel shared(d, individuo, n, m, suma_distancias)
+	{
+		double suma_local = 0.0; // Variable privada al declararse dentro de la región paralela
+		int i, j, elem1, elem2;
+
+		#pragma omp for
+		for (i=0; i<m-1; i++) {
+			for (j=i+1; j<m; j++) {
+				elem1 = individuo->array_int[i];
+				elem2 = individuo->array_int[j];
+				suma_distancias += distancia_ij(d, elem1, elem2, n);
+			}
+		}
+
+		// Operación atómica solo una vez por hilo al final
+		#pragma omp atomic
+		{
+			suma_distancias += suma_local;
+		}
+	}
+
+	individuo->fitness = suma_distancias;
+}
+
+
+
+// 3. Utilizando la cláusula reduction
+
+void fitness(const double *d, Individuo *individuo, int n, int m)
+{
+	double suma_distancias = 0.0;
+	int i, j, elem1, elem2;
+
+	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m)
+	{
+		for (i=0; i<m-1; i++) {
+			for (j=i+1; j<m; j++) {
+				elem1 = individuo->array_int[i];
+				elem2 = individuo->array_int[j];
+				suma_distancias += distancia_ij(d, elem1, elem2, n);
+			}
+		}
+	}
+
+	individuo->fitness = suma_distancias;
+}
+*/
