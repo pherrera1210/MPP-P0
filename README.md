@@ -13,5 +13,10 @@ Trabajo realizado en pareja por los alumnos:
 
 ## Documentación y Memoria
 
-La memoria ha sido realizada en el siguiente documento de [Word Web]:
+La memorias han sido realizadas en distintos documentos de [Word Web]:
+
+**Práctica 0:**
 https://univmurcia-my.sharepoint.com/:w:/g/personal/p_herrerafrutos_um_es/IQAEbAqJys0bQqSNiCFgRmv7AW8HHhQUdKC5OXXts71RPu4?e=CvwZiw
+
+**Práctica 1:**
+https://univmurcia-my.sharepoint.com/:w:/g/personal/p_herrerafrutos_um_es/IQC9gkNlkJemQK71zlgaRdcGARfYQ9N5HY270C8Mgdp0jqo?e=mMGtUe
