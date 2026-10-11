@@ -17,6 +17,16 @@ unsigned int seed;
 
 
 int aleatorio(int n) {
+
+	/*
+	int val;
+    #pragma omp critical
+    {
+        val = rand() % n;
+    }
+    return val;
+	*/
+
 	return (rand_r(&seed) % n);  // genera un numero aleatorio entre 0 y n-1
 }
 
@@ -74,14 +84,16 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	// Desactiva ajuste dinámico de hilos
 	omp_set_dynamic(0);
 
-	// Primera región paralela
+	// Inicializa la semilla para cada hilo de OpenMP
 	#pragma omp parallel
 	{
 		// Combinamos el tiempo actual con el ID del hilo para tener semillas únicas
 		seed = time(NULL) ^ omp_get_thread_num();
 	}
-	
+
 	// crea cada individuo (array de enteros aleatorios)
+	// Primera region paralela
+	#pragma omp parallel for private(i) shared(poblacion, d, n, m)
 	for(i = 0; i < tam_pob; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
 		poblacion[i]->array_int = crear_individuo(n, m);
