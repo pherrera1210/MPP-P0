@@ -93,7 +93,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 
 	// crea cada individuo (array de enteros aleatorios)
 	// Primera region paralela
-	#pragma omp parallel for private(i) shared(poblacion, d, n, m)
+	#pragma omp parallel for
 	for(i = 0; i < tam_pob; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
 		poblacion[i]->array_int = crear_individuo(n, m);
@@ -276,9 +276,8 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 
 // VERSIONES FUNCIÓN FITNESS
 
-
-// 1. Utilizando el constructor critical
 /*
+// 1. Utilizando el constructor critical
 void fitness(const double *d, Individuo *individuo, int n, int m)
 {
 	double suma_distancias = 0.0;
@@ -288,7 +287,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 		double suma_local = 0.0; // Variable privada al declararse dentro de la región paralela
 		int i, j, elem1, elem2;
 
-		#pragma omp for
+		#pragma omp for private(i,j,elem1,elem2)
 		for (i=0; i<m-1; i++) {
 			for (j=i+1; j<m; j++) {
 				elem1 = individuo->array_int[i];
