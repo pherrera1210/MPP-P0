@@ -256,6 +256,7 @@ double distancia_ij(const double *d, int i, int j, int n)
 }
 
 
+/*
 void fitness(const double *d, Individuo *individuo, int n, int m)
 {
 	// Determina la calidad del individuo calculando la suma de la distancia entre cada par de enteros
@@ -273,6 +274,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	// Asignamos el valor objetivo maximizado al fitness del individuo
 	individuo->fitness = suma_distancias;
 }
+*/
 
 // VERSIONES FUNCIÓN FITNESS
 
@@ -292,7 +294,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 			for (j=i+1; j<m; j++) {
 				elem1 = individuo->array_int[i];
 				elem2 = individuo->array_int[j];
-				suma_distancias += distancia_ij(d, elem1, elem2, n);
+				suma_local += distancia_ij(d, elem1, elem2, n);
 			}
 		}
 
@@ -305,9 +307,9 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 
 	individuo->fitness = suma_distancias;
 }
+*/
 
-
-
+/*
 // 2. Utilizando el constructor atomic
 
 void fitness(const double *d, Individuo *individuo, int n, int m)
@@ -324,20 +326,18 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 			for (j=i+1; j<m; j++) {
 				elem1 = individuo->array_int[i];
 				elem2 = individuo->array_int[j];
-				suma_distancias += distancia_ij(d, elem1, elem2, n);
+				suma_local += distancia_ij(d, elem1, elem2, n);
 			}
 		}
 
 		// Operación atómica solo una vez por hilo al final
 		#pragma omp atomic
-		{
 			suma_distancias += suma_local;
-		}
 	}
 
 	individuo->fitness = suma_distancias;
 }
-
+*/
 
 
 // 3. Utilizando la cláusula reduction
@@ -347,8 +347,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	double suma_distancias = 0.0;
 	int i, j, elem1, elem2;
 
-	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m)
-	{
+	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m) reduction(+:suma_distancias)
 		for (i=0; i<m-1; i++) {
 			for (j=i+1; j<m; j++) {
 				elem1 = individuo->array_int[i];
@@ -356,8 +355,6 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 				suma_distancias += distancia_ij(d, elem1, elem2, n);
 			}
 		}
-	}
 
 	individuo->fitness = suma_distancias;
 }
-*/
