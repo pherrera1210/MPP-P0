@@ -256,7 +256,7 @@ double distancia_ij(const double *d, int i, int j, int n)
 }
 
 
-/*
+
 void fitness(const double *d, Individuo *individuo, int n, int m)
 {
 	// Determina la calidad del individuo calculando la suma de la distancia entre cada par de enteros
@@ -274,7 +274,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	// Asignamos el valor objetivo maximizado al fitness del individuo
 	individuo->fitness = suma_distancias;
 }
-*/
+
 
 // VERSIONES FUNCIÓN FITNESS
 
@@ -339,7 +339,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 }
 */
 
-
+/*
 // 3. Utilizando la cláusula reduction
 
 void fitness(const double *d, Individuo *individuo, int n, int m)
@@ -347,7 +347,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	double suma_distancias = 0.0;
 	int i, j, elem1, elem2;
 
-	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m) reduction(+:suma_distancias)
+	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m) reduction(+:suma_distancias) //schedule(guided, 64)
 		for (i=0; i<m-1; i++) {
 			for (j=i+1; j<m; j++) {
 				elem1 = individuo->array_int[i];
@@ -358,3 +358,4 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 
 	individuo->fitness = suma_distancias;
 }
+*/
