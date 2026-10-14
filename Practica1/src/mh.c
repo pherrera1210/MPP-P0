@@ -182,38 +182,47 @@ void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *h
 	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
 	int corte = 1 + aleatorio(m-1);
 	
-	// Los primeros genes del padre1 van al hijo1. Idem para el padre2 e hijo2.
-	for (int i=0; i<corte; i++) {
-		hijo1->array_int[i] = padre1->array_int[i];
-		hijo2->array_int[i] = padre2->array_int[i];
-	}
-	
-	// Y los restantes son del otro padre, respectivamente.
-	for (int i=corte; i<m; i++) {
-		hijo1->array_int[i] = padre2->array_int[i];
-		hijo2->array_int[i] = padre1->array_int[i];
-	}
-	
-	// Factibilizar: eliminar posibles repetidos de ambos hijos
-	// Hijo 1: reemplazamos duplicados comprobando desde el inicio hasta la posición actual i
-	for (int i=corte; i<m; i++) {
-		if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
-			int nuevo_val;
-			do {
-				nuevo_val = aleatorio(n);
-			} while (find_element(hijo1->array_int, i, nuevo_val));
-			hijo1->array_int[i] = nuevo_val;
+	// Abrimos la región paralela y definimos las secciones
+	#pragma omp parallel sections
+	{
+		// Sección 1
+		#pragma omp section
+		{
+			for (int i=0; i<corte; i++) {
+				hijo1->array_int[i] = padre1->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				hijo1->array_int[i] = padre2->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
+					int nuevo_val;
+					do {
+						nuevo_val = aleatorio(n);
+					} while (find_element(hijo1->array_int, i, nuevo_val));
+					hijo1->array_int[i] = nuevo_val;
+				}
+			}
 		}
-	}
-	
-	// Hijo 2:
-	for (int i=corte; i<m; i++) {
-		if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
-			int nuevo_val;
-			do {
-				nuevo_val = aleatorio(n);
-			} while (find_element(hijo2->array_int, i, nuevo_val));
-			hijo2->array_int[i] = nuevo_val;
+
+		// Sección 2
+		#pragma omp section
+		{
+			for (int i=0; i<corte; i++) {
+				hijo2->array_int[i] = padre2->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				hijo2->array_int[i] = padre1->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
+					int nuevo_val;
+					do {
+						nuevo_val = aleatorio(n);
+					} while (find_element(hijo2->array_int, i, nuevo_val));
+					hijo2->array_int[i] = nuevo_val;
+				}
+			}
 		}
 	}
 }
