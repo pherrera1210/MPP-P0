@@ -103,7 +103,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	}
 	
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+	// Sustituimos qsort por mergeSort
+	#pragma omp parallel
+	{
+		#pragma omp single
+		mergeSort(poblacion, 0, tam_pob);
+	}
 	
 	// Variables para el criterio de convergencia
 	double mejor_fitness_previo = poblacion[0]->fitness;
@@ -131,7 +136,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		}
 		
 		// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-		qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+		// Sustituimos qsort por mergeSort
+		#pragma omp parallel
+		{
+			#pragma omp single
+			mergeSort(poblacion, 0, tam_pob);
+		}
 		
 		if (PRINT) {
 			printf("Generacion %d - ", g);
@@ -368,3 +378,22 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	individuo->fitness = suma_distancias;
 }
 */
+
+// Declaración de la función proporcionada en mezclar.c
+extern void mezclar(Individuo **poblacion, int izq, int med, int der);
+
+void mergeSort(Individuo **poblacion, int izq, int der) {
+	int med = (izq + der) / 2;
+	if ((der - izq) < 2) return;
+
+	// Se crean tareas independientes para cada mitad del array
+	#pragma omp task shared(poblacion)
+	mergeSort(poblacion, izq, med);
+
+	#pragma omp task shared(poblacion)
+	mergeSort(poblacion, med, der);
+
+	// Se espera a que las tareas hijas terminen antes de mezclar
+	#pragma omp taskwait
+	mezclar(poblacion, izq, med, der);
+}
