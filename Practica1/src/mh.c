@@ -92,8 +92,8 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	}
 
 	// crea cada individuo (array de enteros aleatorios)
-	// Primera region paralela
-	#pragma omp parallel for
+	// Paralelización de Inicialización y Fitness inicial
+	#pragma omp parallel for private(i) schedule(static)
 	for(i = 0; i < tam_pob; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
 		poblacion[i]->array_int = crear_individuo(n, m);
@@ -118,6 +118,8 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	for(g = 0; g < n_gen; g++)
 	{
 		// los hijos de los ascendientes mas aptos sustituyen a la ultima mitad de los individuos menos aptos
+		// Paralelización del cruce
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = 0; i < (tam_pob/2) - 1; i += 2) {
 			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob/2 + i], poblacion[tam_pob/2 + i + 1], n, m);
 		}
@@ -126,11 +128,15 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		mutation_start = tam_pob/4;
 		
 		// muta 3/4 partes de la poblacion
+		// Paralelización de la mutación
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = mutation_start; i < tam_pob; i++) {
 			mutar(poblacion[i], n, m, m_rate);
 		}
 		
 		// recalcula el fitness del individuo
+		// Paralelización del fitness
+		#pragma omp parallel for private(i) schedule(static)
 		for(i = 0; i < tam_pob; i++) {
 			fitness(d, poblacion[i], n, m);
 		}
@@ -192,6 +198,49 @@ void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *h
 	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
 	int corte = 1 + aleatorio(m-1);
 	
+	// Los primeros genes del padre1 van al hijo1. Idem para el padre2 e hijo2.
+	for (int i=0; i<corte; i++) {
+		hijo1->array_int[i] = padre1->array_int[i];
+		hijo2->array_int[i] = padre2->array_int[i];
+	}
+	
+	// Y los restantes son del otro padre, respectivamente.
+	for (int i=corte; i<m; i++) {
+		hijo1->array_int[i] = padre2->array_int[i];
+		hijo2->array_int[i] = padre1->array_int[i];
+	}
+	
+	// Factibilizar: eliminar posibles repetidos de ambos hijos
+	// Hijo 1: reemplazamos duplicados comprobando desde el inicio hasta la posición actual i
+	for (int i=corte; i<m; i++) {
+		if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
+			int nuevo_val;
+			do {
+				nuevo_val = aleatorio(n);
+			} while (find_element(hijo1->array_int, i, nuevo_val));
+			hijo1->array_int[i] = nuevo_val;
+		}
+	}
+	
+	// Hijo 2:
+	for (int i=corte; i<m; i++) {
+		if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
+			int nuevo_val;
+			do {
+				nuevo_val = aleatorio(n);
+			} while (find_element(hijo2->array_int, i, nuevo_val));
+			hijo2->array_int[i] = nuevo_val;
+		}
+	}
+}
+
+// Función cruzar paralelizada por secciones
+/*
+void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
+{
+	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
+	int corte = 1 + aleatorio(m-1);
+	
 	// Abrimos la región paralela y definimos las secciones
 	#pragma omp parallel sections
 	{
@@ -236,6 +285,7 @@ void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *h
 		}
 	}
 }
+*/
 
 void mutar(Individuo *actual, int n, int m, double m_rate)
 {
