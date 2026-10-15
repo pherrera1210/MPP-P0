@@ -92,8 +92,8 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	}
 
 	// crea cada individuo (array de enteros aleatorios)
-	// Primera region paralela
-	#pragma omp parallel for
+	// Paralelización de Inicialización y Fitness inicial
+	#pragma omp parallel for private(i) schedule(static)
 	for(i = 0; i < tam_pob; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
 		poblacion[i]->array_int = crear_individuo(n, m);
@@ -103,7 +103,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	}
 	
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+	// Sustituimos qsort por mergeSort
+	#pragma omp parallel
+	{
+		#pragma omp single
+		mergeSort(poblacion, 0, tam_pob);
+	}
 	
 	// Variables para el criterio de convergencia
 	double mejor_fitness_previo = poblacion[0]->fitness;
@@ -113,6 +118,8 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	for(g = 0; g < n_gen; g++)
 	{
 		// los hijos de los ascendientes mas aptos sustituyen a la ultima mitad de los individuos menos aptos
+		// Paralelización del cruce
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = 0; i < (tam_pob/2) - 1; i += 2) {
 			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob/2 + i], poblacion[tam_pob/2 + i + 1], n, m);
 		}
@@ -121,17 +128,26 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		mutation_start = tam_pob/4;
 		
 		// muta 3/4 partes de la poblacion
+		// Paralelización de la mutación
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = mutation_start; i < tam_pob; i++) {
 			mutar(poblacion[i], n, m, m_rate);
 		}
 		
 		// recalcula el fitness del individuo
+		// Paralelización del fitness
+		#pragma omp parallel for private(i) schedule(static)
 		for(i = 0; i < tam_pob; i++) {
 			fitness(d, poblacion[i], n, m);
 		}
 		
 		// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-		qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+		// Sustituimos qsort por mergeSort
+		#pragma omp parallel
+		{
+			#pragma omp single
+			mergeSort(poblacion, 0, tam_pob);
+		}
 		
 		if (PRINT) {
 			printf("Generacion %d - ", g);
@@ -217,6 +233,59 @@ void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *h
 		}
 	}
 }
+
+// Función cruzar paralelizada por secciones
+/*
+void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
+{
+	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
+	int corte = 1 + aleatorio(m-1);
+	
+	// Abrimos la región paralela y definimos las secciones
+	#pragma omp parallel sections
+	{
+		// Sección 1
+		#pragma omp section
+		{
+			for (int i=0; i<corte; i++) {
+				hijo1->array_int[i] = padre1->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				hijo1->array_int[i] = padre2->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
+					int nuevo_val;
+					do {
+						nuevo_val = aleatorio(n);
+					} while (find_element(hijo1->array_int, i, nuevo_val));
+					hijo1->array_int[i] = nuevo_val;
+				}
+			}
+		}
+
+		// Sección 2
+		#pragma omp section
+		{
+			for (int i=0; i<corte; i++) {
+				hijo2->array_int[i] = padre2->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				hijo2->array_int[i] = padre1->array_int[i];
+			}
+			for (int i=corte; i<m; i++) {
+				if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
+					int nuevo_val;
+					do {
+						nuevo_val = aleatorio(n);
+					} while (find_element(hijo2->array_int, i, nuevo_val));
+					hijo2->array_int[i] = nuevo_val;
+				}
+			}
+		}
+	}
+}
+*/
 
 void mutar(Individuo *actual, int n, int m, double m_rate)
 {
@@ -359,3 +428,22 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 	individuo->fitness = suma_distancias;
 }
 */
+
+// Declaración de la función proporcionada en mezclar.c
+extern void mezclar(Individuo **poblacion, int izq, int med, int der);
+
+void mergeSort(Individuo **poblacion, int izq, int der) {
+	int med = (izq + der) / 2;
+	if ((der - izq) < 2) return;
+
+	// Se crean tareas independientes para cada mitad del array
+	#pragma omp task shared(poblacion)
+	mergeSort(poblacion, izq, med);
+
+	#pragma omp task shared(poblacion)
+	mergeSort(poblacion, med, der);
+
+	// Se espera a que las tareas hijas terminen antes de mezclar
+	#pragma omp taskwait
+	mezclar(poblacion, izq, med, der);
+}
