@@ -103,13 +103,17 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	}
 	
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
+	/*
 	// Sustituimos qsort por mergeSort
 	#pragma omp parallel
 	{
 		#pragma omp single
 		mergeSort(poblacion, 0, tam_pob);
 	}
+	*/
 	
+	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+
 	// Variables para el criterio de convergencia
 	double mejor_fitness_previo = poblacion[0]->fitness;
 	int iter_sin_mejora = 0;
@@ -142,12 +146,16 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		}
 		
 		// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
+		/*
 		// Sustituimos qsort por mergeSort
 		#pragma omp parallel
 		{
 			#pragma omp single
 			mergeSort(poblacion, 0, tam_pob);
 		}
+		*/
+
+		qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
 		
 		if (PRINT) {
 			printf("Generacion %d - ", g);
@@ -429,6 +437,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 }
 */
 
+/*
 // Declaración de la función proporcionada en mezclar.c
 extern void mezclar(Individuo **poblacion, int izq, int med, int der);
 
@@ -447,3 +456,4 @@ void mergeSort(Individuo **poblacion, int izq, int der) {
 	#pragma omp taskwait
 	mezclar(poblacion, izq, med, der);
 }
+*/
