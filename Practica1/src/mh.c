@@ -15,6 +15,9 @@ unsigned int seed;
 #define PORCENTAJE_CONVERGENCIA 0.10
 #define MAX_ITER_SIN_MEJORA 20
 
+void mergeSort(Individuo **poblacion, int izq, int der);
+
+void mezclar(Individuo **poblacion, int izq, int med, int der);
 
 int aleatorio(int n) {
 
@@ -440,6 +443,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 /*
 // Declaración de la función proporcionada en mezclar.c
 extern void mezclar(Individuo **poblacion, int izq, int med, int der);
+*/
 
 void mergeSort(Individuo **poblacion, int izq, int der) {
 	int med = (izq + der) / 2;
@@ -456,4 +460,49 @@ void mergeSort(Individuo **poblacion, int izq, int der) {
 	#pragma omp taskwait
 	mezclar(poblacion, izq, med, der);
 }
+<<<<<<< Updated upstream
 */
+=======
+
+void mezclar(Individuo **poblacion, int izq, int med, int der)
+{	
+	int i, j, k;
+	
+	Individuo **pob = (Individuo **) malloc((der - izq)*sizeof(Individuo *));
+	assert(pob);
+	
+	for(i = 0; i < (der - izq); i++) {
+		pob[i] = (Individuo *) malloc(sizeof(Individuo));
+	}
+	
+	k = 0;
+	i = izq;
+	j = med;
+	while( (i < med) && (j < der) ) {
+		if (poblacion[i]->fitness > poblacion[j]->fitness) { // considerar "<" o ">" según sea el problema de minimización o de maximización
+			// copiar poblacion[i++] en pob[k++] // por ejemplo con memmove
+		}
+		else {
+			// copiar poblacion[j++] en pob[k++]
+		}
+	}
+	
+	for(; i < med; i++) {
+		// copiar poblacion[i] en pob[k++]
+	}
+	
+	for(; j < der; j++) {
+		// copiar poblacion[j] en pob[k++]
+	}
+	
+	i = 0;
+	while(i < (der - izq)) {
+		// copiar pob[i] en poblacion[i + izq]
+		// ...
+		// liberar individuo 'i'
+		free(pob[i]);
+		i++;
+	}
+	free(pob);
+}
+>>>>>>> Stashed changes
