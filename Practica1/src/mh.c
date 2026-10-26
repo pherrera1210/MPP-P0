@@ -102,6 +102,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		fitness(d, poblacion[i], n, m);
 	}
 	
+	/*
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
 	// Sustituimos qsort por mergeSort
 	#pragma omp parallel
@@ -109,6 +110,9 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		#pragma omp single
 		mergeSort(poblacion, 0, tam_pob);
 	}
+	*/
+
+	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
 	
 	// Variables para el criterio de convergencia
 	double mejor_fitness_previo = poblacion[0]->fitness;
@@ -119,7 +123,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	{
 		// los hijos de los ascendientes mas aptos sustituyen a la ultima mitad de los individuos menos aptos
 		// Paralelización del cruce
-		#pragma omp parallel for private(i) schedule(guided)
+		#pragma omp parallel for private(i) schedule(static)
 		for(i = 0; i < (tam_pob/2) - 1; i += 2) {
 			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob/2 + i], poblacion[tam_pob/2 + i + 1], n, m);
 		}
@@ -136,11 +140,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		
 		// recalcula el fitness del individuo
 		// Paralelización del fitness
-		#pragma omp parallel for private(i) schedule(static)
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = 0; i < tam_pob; i++) {
 			fitness(d, poblacion[i], n, m);
 		}
 		
+		/*
 		// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
 		// Sustituimos qsort por mergeSort
 		#pragma omp parallel
@@ -148,6 +153,8 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 			#pragma omp single
 			mergeSort(poblacion, 0, tam_pob);
 		}
+		*/
+		qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
 		
 		if (PRINT) {
 			printf("Generacion %d - ", g);
@@ -429,6 +436,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 }
 */
 
+/*
 // Declaración de la función proporcionada en mezclar.c
 extern void mezclar(Individuo **poblacion, int izq, int med, int der);
 
@@ -447,3 +455,4 @@ void mergeSort(Individuo **poblacion, int izq, int der) {
 	#pragma omp taskwait
 	mezclar(poblacion, izq, med, der);
 }
+*/

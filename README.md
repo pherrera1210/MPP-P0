@@ -20,3 +20,6 @@ https://univmurcia-my.sharepoint.com/:w:/g/personal/p_herrerafrutos_um_es/IQAEbA
 
 **Práctica 1:**
 https://univmurcia-my.sharepoint.com/:w:/g/personal/p_herrerafrutos_um_es/IQC9gkNlkJemQK71zlgaRdcGARfYQ9N5HY270C8Mgdp0jqo?e=mMGtUe
+
+**Práctica 2:**
+https://univmurcia-my.sharepoint.com/:w:/g/personal/p_herrerafrutos_um_es/IQAaaHg-yq-WQYxJA5iBEEytAR3l-Muo91PogODzJfi7H90?e=sNev2r
