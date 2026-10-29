@@ -11,7 +11,7 @@ double *read_distances(int n)
         //if(scanf("%d", &n)){};
         //if(scanf("%d", &aux)){};
 
-        double *d = (double *) malloc(((n*n-n)/2)*sizeof(int));
+        double *d = (double *) malloc(((n*n-n)/2)*sizeof(double));
 
         for(i=0;i<(n*n-n)/2;i++)
         {
@@ -43,6 +43,6 @@ void print_distances(double *d, int n)
 void print_solution(int n, int m, const int *solucion, double valor)
 {
 	printf("\nSolution: ");
-	for(int i = 0; i <= m; i++) { printf("%d ", solucion[i]); }
+	for(int i = 0; i < m; i++) { printf("%d ", solucion[i]); }
 	printf("\nDistance: %.2lf\n", valor);
 }
