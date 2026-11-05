@@ -1,11 +1,6 @@
 CC = mpicc
 CFLAGS = -O3 -Wall -std=c99 -g -fopenmp
 
-N = 
-M = 
-N_GEN = 
-T_POB = 
-M_RATE =
 
 EXEC_SEC = sec
 EXEC_PARALLEL = parallel
@@ -25,7 +20,7 @@ parallel: $(C_FILES)
 	$(CC) $(CFLAGS) $(C_FILES) -o $(EXEC_PARALLEL) -DTIME -DDEBUG
 
 test_parallel:
-	mpirun -np $(HILOS) ./$(EXEC_PARALLEL) $(N) $(M) $(N_GEN) $(T_POB) $(M_RATE) >> $(OUTFILE)_$(N)_$(M)_$(N_GEN)_$(T_POB)_$(M_RATE)_hilos$(HILOS).txt
+	mpirun -oversubscribe -np $(HILOS) ./$(EXEC_PARALLEL) $(N) $(M) $(N_GEN) $(T_POB) $(M_RATE) < ../input/input_$(N)_$(M)_$(N_GEN)_$(T_POB).txt >> $(OUTFILE)_$(N)_$(M)_$(N_GEN)_$(T_POB)_$(M_RATE)_hilos$(HILOS).txt
 
 clean:
 	rm -f $(EXEC_SEC) $(EXEC_PARALLEL)

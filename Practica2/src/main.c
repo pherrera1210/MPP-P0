@@ -40,27 +40,36 @@ int main(int argc, char **argv)
 	double *d = read_distances(n);
 	
 	#ifdef DEBUG
-//		print_distances(d, n);
+	//	print_distances(d, n);
 	#endif
 	
-//	Allocate memory for output data
+	//	Allocate memory for output data
 	int *sol = (int *) malloc(m * sizeof(int));
 	
 	#ifdef TIME
+		// sincroniza todas las islas antes de medir
+		MPI_Barrier(MPI_COMM_WORLD); 
 		double ti = mseconds();
 	#endif
 	
-//	Call Metaheuristic
+	//	Call Metaheuristic
 	double value = aplicar_mh(d, n, m, n_gen, tam_pob, m_rate, sol);
 	
+	int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
 	#ifdef TIME
+		// espera a que todas terminen para congelar el reloj
+		MPI_Barrier(MPI_COMM_WORLD);
 		double tf = mseconds();
-		printf("Execution Time: %.2lf sec\n", (tf - ti)/1000);
+		if (rank == 0)
+			printf("Execution Time: %.2lf sec\n", (tf - ti)/1000);
 	#endif
 	
 	
 	#ifdef DEBUG
-		print_solution(n, m, sol, value);
+		if (rank == 0)
+			print_solution(n, m, sol, value);
 	#endif
 	
 	//	Free Allocated Memory	

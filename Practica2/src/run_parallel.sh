@@ -23,7 +23,6 @@ while read line ; do
         echo "=================================================="
 
         for hilos in "${LISTA_HILOS[@]}"; do
-            export OMP_NUM_THREADS=$hilos
             echo -n "--> Ejecutando con Hilos = $hilos: "
             
             # Pasamos HILOS=$hilos al Makefile
