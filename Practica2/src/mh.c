@@ -16,7 +16,13 @@
 #define NGM 10 // Frecuencia de migración (cada 10 generaciones)
 #define NEM 2  // Número de individuos migrantes por isla
 
+/*
 void crear_tipo_datos(int m, MPI_Datatype *tipo_individuo);
+*/
+
+void empaquetar_individuo(Individuo *ind, int m, char *buffer, int buffer_size, MPI_Comm comm);
+void desempaquetar_individuo(Individuo *ind, int m, char *buffer, int buffer_size, MPI_Comm comm);
+
 
 int aleatorio(int n) {
 	return (rand() % n);  // genera un numero aleatorio entre 0 y n-1
@@ -75,9 +81,20 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
     srand(time(NULL) + getpid() + rank);
 	int i, g, mutation_start;
 	
+	/*
 	// definimos el tipo derivado de MPI para Individuo
     MPI_Datatype MPI_INDIVIDUO;
     crear_tipo_datos(m, &MPI_INDIVIDUO);
+	*/
+
+	// cuestion 3 - reservamos memoria para buffers de empaquetamiento
+    int size_ints, size_double;
+    MPI_Pack_size(m, MPI_INT, MPI_COMM_WORLD, &size_ints);
+    MPI_Pack_size(1, MPI_DOUBLE, MPI_COMM_WORLD, &size_double);
+    int pack_buffer_size = size_ints + size_double;
+    
+    char *pack_buffer = (char *) malloc(pack_buffer_size);
+    assert(pack_buffer);
 
 	// crea poblacion inicial (array de individuos)
 	// cada proceso con su propia subpoblacion
@@ -142,13 +159,17 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
             if (rank != 0) {
                 // las islas envían sus NEM mejores individuos al maestro
                 for (i = 0; i < NEM; i++) {
-                    MPI_Send(poblacion[i], 1, MPI_INDIVIDUO, 0, 10, MPI_COMM_WORLD);
+                    // MPI_Send(poblacion[i], 1, MPI_INDIVIDUO, 0, 10, MPI_COMM_WORLD);
+					empaquetar_individuo(poblacion[i], m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
+                    MPI_Send(pack_buffer, pack_buffer_size, MPI_PACKED, 0, 10, MPI_COMM_WORLD);
                 }
                 // reciben de vuelta los nuevos individuos sustitutos
                 for (i = 0; i < NEM; i++) {
 					int idx = tam_pob_isla - NEM + i;
 					// MPI_STATUS_IGNORE sirve para ignorar el estado de la recepción
-                    MPI_Recv(poblacion[idx], 1, MPI_INDIVIDUO, 0, 20, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    // MPI_Recv(poblacion[idx], 1, MPI_INDIVIDUO, 0, 20, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					MPI_Recv(pack_buffer, pack_buffer_size, MPI_PACKED, 0, 20, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    desempaquetar_individuo(poblacion[idx], m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
                 }
             } else {
                 // el maestro (Rank 0) recopila sus propios individuos primero
@@ -158,11 +179,13 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
                 }
 
                 // recibe de las islas usando MPI_ANY_SOURCE para poder recibir de cualquier proceso en cualquier orden
+				// cuestion 3 - recibe y desempaqueta los individuos migrantes de cada isla
                 MPI_Status status;
                 for (int p = 1; p < num_procs; p++) {
                     for (i = 0; i < NEM; i++) {
                         int idx = p * NEM + i;
-                        MPI_Recv(buffer_master[idx], 1, MPI_INDIVIDUO, MPI_ANY_SOURCE, 10, MPI_COMM_WORLD, &status);
+                        MPI_Recv(pack_buffer, pack_buffer_size, MPI_PACKED, MPI_ANY_SOURCE, 10, MPI_COMM_WORLD, &status);
+                        desempaquetar_individuo(buffer_master[idx], m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
                     }
                 }
 
@@ -170,10 +193,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
                 qsort(buffer_master, num_procs * NEM, sizeof(Individuo *), comp_fitness);
 
                 // devuelve los mejores seleccionados a cada isla
+				// cuestion 3 - empaqueta y envía los individuos migrantes a cada isla
                 for (int p = 1; p < num_procs; p++) {
                     for (i = 0; i < NEM; i++) {
                         int idx = p * NEM + i;
-                        MPI_Send(buffer_master[idx], 1, MPI_INDIVIDUO, p, 20, MPI_COMM_WORLD);
+                        empaquetar_individuo(buffer_master[idx], m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
+                        MPI_Send(pack_buffer, pack_buffer_size, MPI_PACKED, p, 20, MPI_COMM_WORLD);
                     }
                 }
                 // el maestro reemplaza los suyos
@@ -191,14 +216,18 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	// elección de la mejor solución global
     double mejor_valor_final = 0.0;
     if (rank != 0) {
-		MPI_Send(poblacion[0], 1, MPI_INDIVIDUO, 0, 10, MPI_COMM_WORLD);
+		// MPI_Send(poblacion[0], 1, MPI_INDIVIDUO, 0, 10, MPI_COMM_WORLD);
+		empaquetar_individuo(poblacion[0], m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
+		MPI_Send(pack_buffer, pack_buffer_size, MPI_PACKED, 0, 10, MPI_COMM_WORLD);
     } else {
         Individuo *mejor_global = poblacion[0];
         
         Individuo candidato;
 
         for (int p = 1; p < num_procs; p++) {
-			MPI_Recv(&candidato, 1, MPI_INDIVIDUO, MPI_ANY_SOURCE, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			// MPI_Recv(&candidato, 1, MPI_INDIVIDUO, MPI_ANY_SOURCE, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(pack_buffer, pack_buffer_size, MPI_PACKED, MPI_ANY_SOURCE, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			desempaquetar_individuo(&candidato, m, pack_buffer, pack_buffer_size, MPI_COMM_WORLD);
 
             if (candidato.fitness > mejor_global->fitness) {
                 memcpy(mejor_global->array_int, candidato.array_int, m * sizeof(int));
@@ -222,7 +251,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
     }
     free(poblacion);
 
-    MPI_Type_free(&MPI_INDIVIDUO);
+    // MPI_Type_free(&MPI_INDIVIDUO);
     return mejor_valor_final;
 }
 
@@ -328,6 +357,7 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
  *  Crea un nuevo tipo de datos derivado en MPI
  *  Necesario para el envio/recepcion de mensajes con datos de tipo Individuo
  **/
+/*
 void crear_tipo_datos(int m, MPI_Datatype *individuo_type)
 {
 	int blocklen[2] = {m, 1};
@@ -339,4 +369,23 @@ void crear_tipo_datos(int m, MPI_Datatype *individuo_type)
 	
 	MPI_Type_create_struct(2, blocklen, disp, dtype, individuo_type); 
 	MPI_Type_commit(individuo_type);
+}
+*/
+
+// se calcula el tamaño del buffer y se empaqueta un Individuo
+void empaquetar_individuo(Individuo *ind, int m, char *buffer, int buffer_size, MPI_Comm comm) {
+    int position = 0;
+    // primero empaquetamos los m enteros del array_int
+    MPI_Pack(ind->array_int, m, MPI_INT, buffer, buffer_size, &position, comm);
+    // después empaquetamos el double fitness
+    MPI_Pack(&(ind->fitness), 1, MPI_DOUBLE, buffer, buffer_size, &position, comm);
+}
+
+// Desempaqueta un buffer contiguo en un Individuo objetivo
+void desempaquetar_individuo(Individuo *ind, int m, char *buffer, int buffer_size, MPI_Comm comm) {
+    int position = 0;
+    // primero desempaquetamos los m enteros hacia array_int
+    MPI_Unpack(buffer, buffer_size, &position, ind->array_int, m, MPI_INT, comm);
+    // después desempaquetamos el double fitness
+    MPI_Unpack(buffer, buffer_size, &position, &(ind->fitness), 1, MPI_DOUBLE, comm);
 }
