@@ -60,8 +60,31 @@ int comp_array_int(const void *a, const void *b) {
 }
 
 int comp_fitness(const void *a, const void *b) {
+<<<<<<< Updated upstream
 	/* qsort pasa un puntero al elemento que está ordenando */
 	return (*(Individuo **)b)->fitness - (*(Individuo **)a)->fitness;
+=======
+	// qsort pasa un puntero al elemento que está ordenando
+	// Se compara sin restar
+	double fa = (*(Individuo **)a)->fitness;
+	double fb = (*(Individuo **)b)->fitness;
+	return (fb > fa) - (fb < fa); // orden descendente
+}
+
+// Copia un individuo (solo los m genes útiles + el fitness)
+static void copiar_individuo(Individuo *dst, const Individuo *src, int m)
+{
+	memcpy(dst->array_int, src->array_int, m * sizeof(int));
+	dst->fitness = src->fitness;
+}
+
+// Sustituye a los NEM peores individuos de la isla por los NEM migrantes recibidos
+static void incorporar_migrantes(Individuo **poblacion, int tam_pob_isla, const Individuo *migrantes, int m)
+{
+	for (int i = 0; i < NEM; i++)
+		copiar_individuo(poblacion[tam_pob_isla - NEM + i], &migrantes[i], m);
+	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
+>>>>>>> Stashed changes
 }
 
 double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double m_rate, int *sol)
@@ -97,6 +120,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
 	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 	
+<<<<<<< Updated upstream
 	// buffers para las migraciones
     Individuo **buffer_master = NULL;
     if (rank == 0) {
@@ -105,6 +129,26 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 			buffer_master[i] = (Individuo *) malloc(sizeof(Individuo));
         }
     }
+=======
+	int hay_migracion = (num_procs > 1);
+
+	// --- islas (rank != 0)
+	Individuo *env = NULL, *rec = NULL;
+
+	// --- maestro (rank == 0)
+	Individuo *recv_all = NULL, *send_all = NULL, **orden = NULL;
+
+	if (rank != 0) {
+		env = (Individuo *) malloc(NEM * sizeof(Individuo));
+		rec = (Individuo *) malloc(NEM * sizeof(Individuo));
+		assert(env && rec);
+	} else {
+		recv_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
+		send_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
+		orden    = (Individuo **) malloc(num_procs * NEM * sizeof(Individuo *));
+		assert(recv_all && send_all && orden);
+	}
+>>>>>>> Stashed changes
 	
 	// evoluciona la poblacion durante un numero de generaciones
 	for(g = 0; g < n_gen; g++)
@@ -137,6 +181,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 			printf("Fitness = %.0lf\n", poblacion[0]->fitness);
 		}
 
+<<<<<<< Updated upstream
 		// migración síncrona con MPI_ANY_SOURCE y MPI_STATUS_IGNORE
         if ((g > 0) && (g % NGM == 0)) {
             if (rank != 0) {
@@ -221,6 +266,76 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
         free(poblacion[i]);
     }
     free(poblacion);
+=======
+		if (hay_migracion && (g > 0) && (g % NGM == 0)) {
+			if (rank != 0) {
+				// copia contigua de los NEM mejores individuos de la isla
+				for (i = 0; i < NEM; i++) copiar_individuo(&env[i], poblacion[i], m);
+ 
+				// los argumentos de recepción solo importan en el root
+				MPI_Gather(env, NEM, MPI_INDIVIDUO, NULL, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+				MPI_Scatter(NULL, NEM, MPI_INDIVIDUO, rec, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				incorporar_migrantes(poblacion, tam_pob_isla, rec, m);
+			} else {
+				// el bloque propio del maestro se deja directamente en la posición 0 del buffer
+				// y se usa MPI_IN_PLACE para que no se envíe a sí mismo
+				for (i = 0; i < NEM; i++) copiar_individuo(&recv_all[i], poblacion[i], m);
+				MPI_Gather(MPI_IN_PLACE, NEM, MPI_INDIVIDUO, recv_all, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				// mezcla y ordenación global
+				int total = num_procs * NEM;
+				for (i = 0; i < total; i++) orden[i] = &recv_all[i];
+				qsort(orden, total, sizeof(Individuo *), comp_fitness);
+				for (i = 0; i < total; i++) copiar_individuo(&send_all[i], orden[i], m);
+ 
+				// el proceso p recibe el bloque send_all[p*NEM .. p*NEM+NEM-1];
+				// el bloque 0 se queda en el maestro
+				MPI_Scatter(send_all, NEM, MPI_INDIVIDUO, MPI_IN_PLACE, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				incorporar_migrantes(poblacion, tam_pob_isla, send_all, m);
+			}
+		}
+	}
+
+	// elección de la mejor solución global
+	double mejor_valor_final = 0.0;
+	if (rank != 0) {
+		MPI_Gather(poblacion[0], 1, MPI_INDIVIDUO, NULL, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+	} else {
+		Individuo *mejor_global = poblacion[0];
+		Individuo *finales = (Individuo *) malloc(num_procs * sizeof(Individuo));
+		assert(finales);
+ 
+		copiar_individuo(&finales[0], poblacion[0], m); // bloque del maestro
+		MPI_Gather(MPI_IN_PLACE, 1, MPI_INDIVIDUO, finales, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+		for (int p = 1; p < num_procs; p++) {
+			if (finales[p].fitness > mejor_global->fitness)
+				copiar_individuo(mejor_global, &finales[p], m);
+		}
+ 
+		qsort(mejor_global->array_int, m, sizeof(int), comp_array_int);
+		memmove(sol, mejor_global->array_int, m * sizeof(int));
+		mejor_valor_final = mejor_global->fitness;
+ 
+		free(finales);
+	}
+
+	// liberación de memoria
+	if (rank == 0) {
+		free(recv_all);
+		free(send_all);
+		free(orden);
+	} else {
+		free(env);
+		free(rec);
+	}
+	for (i = 0; i < tam_pob_isla; i++) {
+		free(poblacion[i]);
+	}
+	free(poblacion);
+>>>>>>> Stashed changes
 
     MPI_Type_free(&MPI_INDIVIDUO);
     return mejor_valor_final;
