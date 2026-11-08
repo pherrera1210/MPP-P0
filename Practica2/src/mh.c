@@ -16,10 +16,6 @@
 #define NGM 10 // Frecuencia de migración (cada 10 generaciones)
 #define NEM 2  // Número de individuos migrantes por isla
 
-// Tags de los mensajes
-#define TAG_MIGRA 10 // isla -> maestro: migrantes
-#define TAG_REPLY 20 // maestro -> isla: individuos de vuelta
-#define TAG_FINAL 30 // isla -> maestro: mejor individuo final
 
 void crear_tipo_datos(int m, MPI_Datatype *tipo_individuo);
 
@@ -87,32 +83,6 @@ static void incorporar_migrantes(Individuo **poblacion, int tam_pob_isla, const 
 	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 }
 
-/* MAESTRO: una vez recibidos los migrantes de TODAS las islas, mezcla y ordena la
-   élite global, devuelve NEM individuos a cada isla con MPI_Isend y se queda con los mejores NEM. */
-static void procesar_migracion_maestro(Individuo **poblacion, int tam_pob_isla, int m, int num_procs,
-                                       Individuo *recv_all, Individuo *send_all, Individuo **orden,
-                                       MPI_Request *req_send, MPI_Datatype tipo)
-{
-	int total = num_procs * NEM;
-
-	// Los envíos de la migración anterior deben haber terminado antes de reutilizar send_all
-	MPI_Waitall(num_procs - 1, req_send, MPI_STATUSES_IGNORE);
-
-	// mezcla y ordenación global
-	for (int k = 0; k < total; k++) orden[k] = &recv_all[k];
-	qsort(orden, total, sizeof(Individuo *), comp_fitness);
-
-	// se copian ordenados a un array contiguo de envío
-	for (int k = 0; k < total; k++) copiar_individuo(&send_all[k], orden[k], m);
-
-	// envío asíncrono de un único mensaje de NEM individuos a cada isla
-	for (int p = 1; p < num_procs; p++)
-		MPI_Isend(&send_all[p * NEM], NEM, tipo, p, TAG_REPLY, MPI_COMM_WORLD, &req_send[p - 1]);
-
-	// el maestro incorpora a su isla los mejores NEM individuos globales
-	incorporar_migrantes(poblacion, tam_pob_isla, send_all, m);
-}
-
 double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double m_rate, int *sol)
 {
 	int rank, num_procs;
@@ -147,15 +117,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 	
 	int hay_migracion = (num_procs > 1);
-	int pendiente = 0; // 1 = hay una migración en curso (respuesta del maestro aún no incorporada)
 
 	// --- islas (rank != 0)
 	Individuo *env = NULL, *rec = NULL;
-	MPI_Request req_env = MPI_REQUEST_NULL, req_rec = MPI_REQUEST_NULL;
 
 	// --- maestro (rank == 0)
 	Individuo *recv_all = NULL, *send_all = NULL, **orden = NULL;
-	MPI_Request *req_recv = NULL, *req_send = NULL;
 
 	if (rank != 0) {
 		env = (Individuo *) malloc(NEM * sizeof(Individuo));
@@ -165,10 +132,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		recv_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
 		send_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
 		orden    = (Individuo **) malloc(num_procs * NEM * sizeof(Individuo *));
-		req_recv = (MPI_Request *) malloc(num_procs * sizeof(MPI_Request));
-		req_send = (MPI_Request *) malloc(num_procs * sizeof(MPI_Request));
-		assert(recv_all && send_all && orden && req_recv && req_send);
-		for (i = 0; i < num_procs; i++) req_recv[i] = req_send[i] = MPI_REQUEST_NULL;
+		assert(recv_all && send_all && orden);
 	}
 	
 	// evoluciona la poblacion durante un numero de generaciones
@@ -202,116 +166,60 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 			printf("Fitness = %.0lf\n", poblacion[0]->fitness);
 		}
 
-		if (hay_migracion) {
-			int es_migracion = (g > 0) && (g % NGM == 0);
-
+		if (hay_migracion && (g > 0) && (g % NGM == 0)) {
+ 
 			if (rank != 0) {
-				// Islas
-				if (es_migracion) {
-					// 1) cerrar la migración anterior si seguía pendiente
-					if (pendiente) {
-						MPI_Wait(&req_rec, MPI_STATUS_IGNORE);
-						incorporar_migrantes(poblacion, tam_pob_isla, rec, m);
-						pendiente = 0;
-					}
-					// 2) el buffer de envío anterior debe estar libre antes de rellenarlo
-					MPI_Wait(&req_env, MPI_STATUS_IGNORE);
-
-					// 3) copia contigua de los NEM mejores y lanzamiento asíncrono
-					for (i = 0; i < NEM; i++) copiar_individuo(&env[i], poblacion[i], m);
-					MPI_Isend(env, NEM, MPI_INDIVIDUO, 0, TAG_MIGRA, MPI_COMM_WORLD, &req_env);
-					MPI_Irecv(rec, NEM, MPI_INDIVIDUO, 0, TAG_REPLY, MPI_COMM_WORLD, &req_rec);
-					pendiente = 1;
-					// la isla continúa evolucionando mientras viajan los mensajes
-				} else if (pendiente) {
-					int flag;
-					MPI_Test(&req_rec, &flag, MPI_STATUS_IGNORE);
-					if (flag) { // ya ha llegado la respuesta del maestro: se incorpora
-						incorporar_migrantes(poblacion, tam_pob_isla, rec, m);
-						pendiente = 0;
-					}
-				}
-			} else {
-				// Maestro
-				if (es_migracion) {
-					// 1) cerrar la migración anterior si seguía pendiente
-					if (pendiente) {
-						MPI_Waitall(num_procs - 1, req_recv, MPI_STATUSES_IGNORE);
-						procesar_migracion_maestro(poblacion, tam_pob_isla, m, num_procs, recv_all, send_all,
-						                           orden, req_send, MPI_INDIVIDUO);
-						pendiente = 0;
-					}
-					// 2) sus propios NEM mejores ocupan las primeras posiciones del buffer global
-					for (i = 0; i < NEM; i++) copiar_individuo(&recv_all[i], poblacion[i], m);
-
-					// 3) una recepción asíncrona por isla (cada una a su zona del buffer)
-					for (int p = 1; p < num_procs; p++)
-						MPI_Irecv(&recv_all[p * NEM], NEM, MPI_INDIVIDUO, p, TAG_MIGRA, MPI_COMM_WORLD, &req_recv[p - 1]);
-					pendiente = 1;
-					// el maestro continúa evolucionando su isla mientras llegan los migrantes
-				} else if (pendiente) {
-					int flag;
-					MPI_Testall(num_procs - 1, req_recv, &flag, MPI_STATUSES_IGNORE);
-					if (flag) { // han llegado los migrantes de todas las islas
-						procesar_migracion_maestro(poblacion, tam_pob_isla, m, num_procs, recv_all, send_all,
-						                           orden, req_send, MPI_INDIVIDUO);
-						pendiente = 0;
-					}
-				}
-			}
-		}
-	}
-
-	/* Al acabar el bucle puede quedar una migración en curso: se completa antes de elegir la mejor solución */
-	if (hay_migracion) {
-		if (rank != 0) {
-			if (pendiente) {
-				MPI_Wait(&req_rec, MPI_STATUS_IGNORE);
+				// copia contigua de los NEM mejores individuos de la isla
+				for (i = 0; i < NEM; i++) copiar_individuo(&env[i], poblacion[i], m);
+ 
+				// los argumentos de recepción solo importan en el root
+				MPI_Gather(env, NEM, MPI_INDIVIDUO, NULL, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+				MPI_Scatter(NULL, NEM, MPI_INDIVIDUO, rec, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
 				incorporar_migrantes(poblacion, tam_pob_isla, rec, m);
-				pendiente = 0;
+			} else {
+				// el bloque propio del maestro se deja directamente en la posición 0 del buffer
+				// y se usa MPI_IN_PLACE para que no se envíe a sí mismo
+				for (i = 0; i < NEM; i++) copiar_individuo(&recv_all[i], poblacion[i], m);
+				MPI_Gather(MPI_IN_PLACE, NEM, MPI_INDIVIDUO, recv_all, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				// mezcla y ordenación global
+				int total = num_procs * NEM;
+				for (i = 0; i < total; i++) orden[i] = &recv_all[i];
+				qsort(orden, total, sizeof(Individuo *), comp_fitness);
+				for (i = 0; i < total; i++) copiar_individuo(&send_all[i], orden[i], m);
+ 
+				// el proceso p recibe el bloque send_all[p*NEM .. p*NEM+NEM-1];
+				// el bloque 0 se queda en el maestro
+				MPI_Scatter(send_all, NEM, MPI_INDIVIDUO, MPI_IN_PLACE, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				incorporar_migrantes(poblacion, tam_pob_isla, send_all, m);
 			}
-			MPI_Wait(&req_env, MPI_STATUS_IGNORE);
-		} else {
-			if (pendiente) {
-				MPI_Waitall(num_procs - 1, req_recv, MPI_STATUSES_IGNORE);
-				procesar_migracion_maestro(poblacion, tam_pob_isla, m, num_procs, recv_all, send_all,
-				                           orden, req_send, MPI_INDIVIDUO);
-				pendiente = 0;
-			}
-			MPI_Waitall(num_procs - 1, req_send, MPI_STATUSES_IGNORE);
 		}
 	}
 
-	// elección de la mejor solución global (también asíncrona)
+	// elección de la mejor solución global
 	double mejor_valor_final = 0.0;
 	if (rank != 0) {
-		MPI_Request req_fin;
-		MPI_Isend(poblacion[0], 1, MPI_INDIVIDUO, 0, TAG_FINAL, MPI_COMM_WORLD, &req_fin);
-		MPI_Wait(&req_fin, MPI_STATUS_IGNORE); // poblacion[0] no se modifica hasta aquí
+		MPI_Gather(poblacion[0], 1, MPI_INDIVIDUO, NULL, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
 	} else {
 		Individuo *mejor_global = poblacion[0];
-
 		Individuo *finales = (Individuo *) malloc(num_procs * sizeof(Individuo));
-		MPI_Request *req_fin = (MPI_Request *) malloc(num_procs * sizeof(MPI_Request));
-		assert(finales && req_fin);
-
-		// se lanzan todas las recepciones y se procesan según van llegando (MPI_Waitany)
-		for (int p = 1; p < num_procs; p++)
-			MPI_Irecv(&finales[p - 1], 1, MPI_INDIVIDUO, p, TAG_FINAL, MPI_COMM_WORLD, &req_fin[p - 1]);
-
-		for (int k = 1; k < num_procs; k++) {
-			int idx;
-			MPI_Waitany(num_procs - 1, req_fin, &idx, MPI_STATUS_IGNORE);
-			if (finales[idx].fitness > mejor_global->fitness)
-				copiar_individuo(mejor_global, &finales[idx], m);
+		assert(finales);
+ 
+		copiar_individuo(&finales[0], poblacion[0], m); // bloque del maestro (posición 0)
+		MPI_Gather(MPI_IN_PLACE, 1, MPI_INDIVIDUO, finales, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+		for (int p = 1; p < num_procs; p++) {
+			if (finales[p].fitness > mejor_global->fitness)
+				copiar_individuo(mejor_global, &finales[p], m);
 		}
-
+ 
 		qsort(mejor_global->array_int, m, sizeof(int), comp_array_int);
 		memmove(sol, mejor_global->array_int, m * sizeof(int));
 		mejor_valor_final = mejor_global->fitness;
-
+ 
 		free(finales);
-		free(req_fin);
 	}
 
 	// liberación de memoria
@@ -319,8 +227,6 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		free(recv_all);
 		free(send_all);
 		free(orden);
-		free(req_recv);
-		free(req_send);
 	} else {
 		free(env);
 		free(rec);
