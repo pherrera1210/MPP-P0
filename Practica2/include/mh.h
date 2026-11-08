@@ -1,10 +1,10 @@
 #ifndef _MH
 #define _MH
 	
-#define MAX 1000
+#define MAX_TAM 2000
 
 	typedef struct {
-		int array_int[MAX];
+		int array_int[MAX_TAM];
 		double fitness;
 	} Individuo;
 	
