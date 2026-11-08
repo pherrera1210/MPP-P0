@@ -4,30 +4,23 @@
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
-#include <omp.h>
-
+#include <stddef.h>
+#include <mpi.h>
 #include "../include/mh.h"
 
-unsigned int seed;
-#pragma omp threadprivate(seed)
-
 #define PRINT 0
-#define PORCENTAJE_CONVERGENCIA 0.10
-#define MAX_ITER_SIN_MEJORA 20
+#define PORCENTAJE_CONVERGENCIA 0.05
+#define MAX_ITER_SIN_MEJORA 5
 
+// Parámetros de migración
+#define NGM 10 // Frecuencia de migración (cada 10 generaciones)
+#define NEM 2  // Número de individuos migrantes por isla
+
+
+void crear_tipo_datos(int m, MPI_Datatype *tipo_individuo);
 
 int aleatorio(int n) {
-
-	/*
-	int val;
-    #pragma omp critical
-    {
-        val = rand() % n;
-    }
-    return val;
-	*/
-
-	return (rand_r(&seed) % n);  // genera un numero aleatorio entre 0 y n-1
+	return (rand() % n);  // genera un numero aleatorio entre 0 y n-1
 }
 
 int find_element(int *array, int end, int element)
@@ -45,23 +38,22 @@ int find_element(int *array, int end, int element)
 	return found;
 }
 
-int *crear_individuo(int n, int m)
+int *crear_individuo(int n, int m, int *array_int)
 {
 	int i=0, value;
-	int *individuo = (int *) malloc(m * sizeof(int));
 	
 	// inicializa array de elementos
-	memset(individuo, -1, m * sizeof(int));
+	memset(array_int, -1, m * sizeof(int));
 	
 	while(i < m) {
 		value = aleatorio(n);
 		// si el nuevo elemento no está en el array...
-		if(!find_element(individuo, i, value)) {
-			individuo[i] = value;  // lo incluimos
+		if(!find_element(array_int, i, value)) {
+			array_int[i] = value;  // lo incluimos
 			i++;
 		}
 	}
-	return individuo;
+	return array_int;
 }
 
 int comp_array_int(const void *a, const void *b) {
@@ -69,135 +61,183 @@ int comp_array_int(const void *a, const void *b) {
 }
 
 int comp_fitness(const void *a, const void *b) {
-	/* qsort pasa un puntero al elemento que está ordenando */
-	return (*(Individuo **)b)->fitness - (*(Individuo **)a)->fitness;
+	// qsort pasa un puntero al elemento que está ordenando
+	// Se compara sin restar
+	double fa = (*(Individuo **)a)->fitness;
+	double fb = (*(Individuo **)b)->fitness;
+	return (fb > fa) - (fb < fa); // orden descendente
+}
+
+// Copia un individuo (solo los m genes útiles + el fitness)
+static void copiar_individuo(Individuo *dst, const Individuo *src, int m)
+{
+	memcpy(dst->array_int, src->array_int, m * sizeof(int));
+	dst->fitness = src->fitness;
+}
+
+// Sustituye a los NEM peores individuos de la isla por los NEM migrantes recibidos
+static void incorporar_migrantes(Individuo **poblacion, int tam_pob_isla, const Individuo *migrantes, int m)
+{
+	for (int i = 0; i < NEM; i++)
+		copiar_individuo(poblacion[tam_pob_isla - NEM + i], &migrantes[i], m);
+	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 }
 
 double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double m_rate, int *sol)
 {
+	int rank, num_procs;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+	// para reiniciar la secuencia pseudoaleatoria en cada ejecución
+	// añadimos el rank del proceso para que cada isla tenga una secuencia diferente
+	srand(time(NULL) + getpid() + rank);
 	int i, g, mutation_start;
 	
-	// crea poblacion inicial (array de individuos)
-	Individuo **poblacion = (Individuo **) malloc(tam_pob * sizeof(Individuo *));
+	// definimos el tipo derivado de MPI para Individuo
+	MPI_Datatype MPI_INDIVIDUO;
+	crear_tipo_datos(m, &MPI_INDIVIDUO);
+
+	// crea poblacion inicial
+	// cada proceso con su propia subpoblacion
+	int tam_pob_isla = tam_pob / num_procs;
+	Individuo **poblacion = (Individuo **) malloc(tam_pob_isla * sizeof(Individuo *));
 	assert(poblacion);
-
-	// Desactiva ajuste dinámico de hilos
-	omp_set_dynamic(0);
-
-	// Inicializa la semilla para cada hilo de OpenMP
-	#pragma omp parallel
-	{
-		// Combinamos el tiempo actual con el ID del hilo para tener semillas únicas
-		seed = time(NULL) ^ omp_get_thread_num();
-	}
-
-	// crea cada individuo (array de enteros aleatorios)
-	// Paralelización de Inicialización y Fitness inicial
-	#pragma omp parallel for private(i) schedule(static)
-	for(i = 0; i < tam_pob; i++) {
+	
+	// crea cada individuo
+	for(i = 0; i < tam_pob_isla; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
-		poblacion[i]->array_int = crear_individuo(n, m);
+		crear_individuo(n, m, poblacion[i]->array_int);
 		
 		// calcula el fitness del individuo
 		fitness(d, poblacion[i], n, m);
 	}
 	
-	/*
-	// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-	// Sustituimos qsort por mergeSort
-	#pragma omp parallel
-	{
-		#pragma omp single
-		mergeSort(poblacion, 0, tam_pob);
-	}
-	*/
-
-	qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+	// ordena individuos segun la funcion de bondad
+	qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 	
-	// Variables para el criterio de convergencia
-	double mejor_fitness_previo = poblacion[0]->fitness;
-	int iter_sin_mejora = 0;
+	int hay_migracion = (num_procs > 1);
+
+	// --- islas (rank != 0)
+	Individuo *env = NULL, *rec = NULL;
+
+	// --- maestro (rank == 0)
+	Individuo *recv_all = NULL, *send_all = NULL, **orden = NULL;
+
+	if (rank != 0) {
+		env = (Individuo *) malloc(NEM * sizeof(Individuo));
+		rec = (Individuo *) malloc(NEM * sizeof(Individuo));
+		assert(env && rec);
+	} else {
+		recv_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
+		send_all = (Individuo *) malloc(num_procs * NEM * sizeof(Individuo));
+		orden    = (Individuo **) malloc(num_procs * NEM * sizeof(Individuo *));
+		assert(recv_all && send_all && orden);
+	}
 	
 	// evoluciona la poblacion durante un numero de generaciones
 	for(g = 0; g < n_gen; g++)
 	{
+
+		// cruce local
 		// los hijos de los ascendientes mas aptos sustituyen a la ultima mitad de los individuos menos aptos
-		// Paralelización del cruce
-		#pragma omp parallel for private(i) schedule(static)
-		for(i = 0; i < (tam_pob/2) - 1; i += 2) {
-			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob/2 + i], poblacion[tam_pob/2 + i + 1], n, m);
+		for(i = 0; i < (tam_pob_isla/2) - 1; i += 2) {
+			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob_isla/2 + i], poblacion[tam_pob_isla/2 + i + 1], n, m);
 		}
 		
+		// mutacion local
 		// inicia la mutacion a partir de 1/4 de la poblacion
-		mutation_start = tam_pob/4;
-		
-		// muta 3/4 partes de la poblacion
-		// Paralelización de la mutación
-		#pragma omp parallel for private(i) schedule(guided)
-		for(i = mutation_start; i < tam_pob; i++) {
+		mutation_start = tam_pob_isla / 4;
+		for(i = mutation_start; i < tam_pob_isla; i++) {
 			mutar(poblacion[i], n, m, m_rate);
 		}
 		
+		// evaluación del fitness local
 		// recalcula el fitness del individuo
-		// Paralelización del fitness
-		#pragma omp parallel for private(i) schedule(guided)
-		for(i = 0; i < tam_pob; i++) {
+		for(i = 0; i < tam_pob_isla; i++) {
 			fitness(d, poblacion[i], n, m);
 		}
 		
-		/*
 		// ordena individuos segun la funcion de bondad (mayor "fitness" --> mas aptos)
-		// Sustituimos qsort por mergeSort
-		#pragma omp parallel
-		{
-			#pragma omp single
-			mergeSort(poblacion, 0, tam_pob);
-		}
-		*/
-		qsort(poblacion, tam_pob, sizeof(Individuo *), comp_fitness);
+		qsort(poblacion, tam_pob_isla, sizeof(Individuo *), comp_fitness);
 		
 		if (PRINT) {
 			printf("Generacion %d - ", g);
 			printf("Fitness = %.0lf\n", poblacion[0]->fitness);
 		}
-		
-		// Criterio de convergencia
-		double fitness_actual = poblacion[0]->fitness;
-		double mejora_minima = mejor_fitness_previo * PORCENTAJE_CONVERGENCIA;
-		
-		// Si el fitness ha mejorado más del porcentaje mínimo exigido, actualizamos
-		if (fitness_actual >= (mejor_fitness_previo + mejora_minima)) {
-			mejor_fitness_previo = fitness_actual;
-			iter_sin_mejora = 0; // Reiniciamos el contador
-		} else {
-			iter_sin_mejora++;
-		}
-		
-		// Si superamos las iteraciones permitidas sin mejora, paramos
-		if (iter_sin_mejora >= MAX_ITER_SIN_MEJORA) {
-			break;
-		}
-	}
-	
-	// ordena el array solucion
-	qsort(poblacion[0]->array_int, m, sizeof(int), comp_array_int);
 
-        // y lo mueve a sol para escribirlo
-	memmove(sol, poblacion[0]->array_int, m*sizeof(int));
-	
-	// almacena el mejor valor obtenido para el fitness
-	double value = poblacion[0]->fitness;
-	
-	// Liberamos los punteros y sus arrays
-    for(i = 0; i < tam_pob; i++) {
-        free(poblacion[i]->array_int);
-        free(poblacion[i]);
+		if (hay_migracion && (g > 0) && (g % NGM == 0)) {
+ 
+			if (rank != 0) {
+				// copia contigua de los NEM mejores individuos de la isla
+				for (i = 0; i < NEM; i++) copiar_individuo(&env[i], poblacion[i], m);
+ 
+				// los argumentos de recepción solo importan en el root
+				MPI_Gather(env, NEM, MPI_INDIVIDUO, NULL, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+				MPI_Scatter(NULL, NEM, MPI_INDIVIDUO, rec, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				incorporar_migrantes(poblacion, tam_pob_isla, rec, m);
+			} else {
+				// el bloque propio del maestro se deja directamente en la posición 0 del buffer
+				// y se usa MPI_IN_PLACE para que no se envíe a sí mismo
+				for (i = 0; i < NEM; i++) copiar_individuo(&recv_all[i], poblacion[i], m);
+				MPI_Gather(MPI_IN_PLACE, NEM, MPI_INDIVIDUO, recv_all, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				// mezcla y ordenación global
+				int total = num_procs * NEM;
+				for (i = 0; i < total; i++) orden[i] = &recv_all[i];
+				qsort(orden, total, sizeof(Individuo *), comp_fitness);
+				for (i = 0; i < total; i++) copiar_individuo(&send_all[i], orden[i], m);
+ 
+				// el proceso p recibe el bloque send_all[p*NEM .. p*NEM+NEM-1];
+				// el bloque 0 se queda en el maestro
+				MPI_Scatter(send_all, NEM, MPI_INDIVIDUO, MPI_IN_PLACE, NEM, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+				incorporar_migrantes(poblacion, tam_pob_isla, send_all, m);
+			}
+		}
 	}
-	// se libera la memoria reservada
+
+	// elección de la mejor solución global
+	double mejor_valor_final = 0.0;
+	if (rank != 0) {
+		MPI_Gather(poblacion[0], 1, MPI_INDIVIDUO, NULL, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+	} else {
+		Individuo *mejor_global = poblacion[0];
+		Individuo *finales = (Individuo *) malloc(num_procs * sizeof(Individuo));
+		assert(finales);
+ 
+		copiar_individuo(&finales[0], poblacion[0], m); // bloque del maestro (posición 0)
+		MPI_Gather(MPI_IN_PLACE, 1, MPI_INDIVIDUO, finales, 1, MPI_INDIVIDUO, 0, MPI_COMM_WORLD);
+ 
+		for (int p = 1; p < num_procs; p++) {
+			if (finales[p].fitness > mejor_global->fitness)
+				copiar_individuo(mejor_global, &finales[p], m);
+		}
+ 
+		qsort(mejor_global->array_int, m, sizeof(int), comp_array_int);
+		memmove(sol, mejor_global->array_int, m * sizeof(int));
+		mejor_valor_final = mejor_global->fitness;
+ 
+		free(finales);
+	}
+
+	// liberación de memoria
+	if (rank == 0) {
+		free(recv_all);
+		free(send_all);
+		free(orden);
+	} else {
+		free(env);
+		free(rec);
+	}
+	for (i = 0; i < tam_pob_isla; i++) {
+		free(poblacion[i]);
+	}
 	free(poblacion);
-	
-	// devuelve el valor obtenido para el fitness
-	return value;
+
+	MPI_Type_free(&MPI_INDIVIDUO);
+	return mejor_valor_final;
 }
 
 void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
@@ -241,59 +281,6 @@ void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *h
 	}
 }
 
-// Función cruzar paralelizada por secciones
-/*
-void cruzar(Individuo *padre1, Individuo *padre2, Individuo *hijo1, Individuo *hijo2, int n, int m)
-{
-	// Elegir un "punto" de corte aleatorio a partir del que se realiza el intercambio de los genes
-	int corte = 1 + aleatorio(m-1);
-	
-	// Abrimos la región paralela y definimos las secciones
-	#pragma omp parallel sections
-	{
-		// Sección 1
-		#pragma omp section
-		{
-			for (int i=0; i<corte; i++) {
-				hijo1->array_int[i] = padre1->array_int[i];
-			}
-			for (int i=corte; i<m; i++) {
-				hijo1->array_int[i] = padre2->array_int[i];
-			}
-			for (int i=corte; i<m; i++) {
-				if (find_element(hijo1->array_int, corte, hijo1->array_int[i])) {
-					int nuevo_val;
-					do {
-						nuevo_val = aleatorio(n);
-					} while (find_element(hijo1->array_int, i, nuevo_val));
-					hijo1->array_int[i] = nuevo_val;
-				}
-			}
-		}
-
-		// Sección 2
-		#pragma omp section
-		{
-			for (int i=0; i<corte; i++) {
-				hijo2->array_int[i] = padre2->array_int[i];
-			}
-			for (int i=corte; i<m; i++) {
-				hijo2->array_int[i] = padre1->array_int[i];
-			}
-			for (int i=corte; i<m; i++) {
-				if (find_element(hijo2->array_int, corte, hijo2->array_int[i])) {
-					int nuevo_val;
-					do {
-						nuevo_val = aleatorio(n);
-					} while (find_element(hijo2->array_int, i, nuevo_val));
-					hijo2->array_int[i] = nuevo_val;
-				}
-			}
-		}
-	}
-}
-*/
-
 void mutar(Individuo *actual, int n, int m, double m_rate)
 {
 	// Decidir cuantos elementos mutar:
@@ -332,7 +319,6 @@ double distancia_ij(const double *d, int i, int j, int n)
 }
 
 
-
 void fitness(const double *d, Individuo *individuo, int n, int m)
 {
 	// Determina la calidad del individuo calculando la suma de la distancia entre cada par de enteros
@@ -352,107 +338,19 @@ void fitness(const double *d, Individuo *individuo, int n, int m)
 }
 
 
-// VERSIONES FUNCIÓN FITNESS
-
-/*
-// 1. Utilizando el constructor critical
-void fitness(const double *d, Individuo *individuo, int n, int m)
+/**
+ *  Crea un nuevo tipo de datos derivado en MPI
+ *  Necesario para el envio/recepcion de mensajes con datos de tipo Individuo
+ **/
+void crear_tipo_datos(int m, MPI_Datatype *individuo_type)
 {
-	double suma_distancias = 0.0;
-
-	#pragma omp parallel shared(d, individuo, n, m, suma_distancias)
-	{
-		double suma_local = 0.0; // Variable privada al declararse dentro de la región paralela
-		int i, j, elem1, elem2;
-
-		#pragma omp for private(i,j,elem1,elem2)
-		for (i=0; i<m-1; i++) {
-			for (j=i+1; j<m; j++) {
-				elem1 = individuo->array_int[i];
-				elem2 = individuo->array_int[j];
-				suma_local += distancia_ij(d, elem1, elem2, n);
-			}
-		}
-
-		// Bloqueo solo una vez por hilo al final
-		#pragma omp critical
-		{
-			suma_distancias += suma_local;
-		}
-	}
-
-	individuo->fitness = suma_distancias;
+	int blocklen[2] = {m, 1};
+	MPI_Datatype dtype[2] = { MPI_INT, MPI_DOUBLE };
+	
+	MPI_Aint disp[2];
+	disp[0] = offsetof(Individuo, array_int);
+	disp[1] = offsetof(Individuo, fitness);
+	
+	MPI_Type_create_struct(2, blocklen, disp, dtype, individuo_type); 
+	MPI_Type_commit(individuo_type);
 }
-*/
-
-/*
-// 2. Utilizando el constructor atomic
-
-void fitness(const double *d, Individuo *individuo, int n, int m)
-{
-	double suma_distancias = 0.0;
-
-	#pragma omp parallel shared(d, individuo, n, m, suma_distancias)
-	{
-		double suma_local = 0.0; // Variable privada al declararse dentro de la región paralela
-		int i, j, elem1, elem2;
-
-		#pragma omp for
-		for (i=0; i<m-1; i++) {
-			for (j=i+1; j<m; j++) {
-				elem1 = individuo->array_int[i];
-				elem2 = individuo->array_int[j];
-				suma_local += distancia_ij(d, elem1, elem2, n);
-			}
-		}
-
-		// Operación atómica solo una vez por hilo al final
-		#pragma omp atomic
-			suma_distancias += suma_local;
-	}
-
-	individuo->fitness = suma_distancias;
-}
-*/
-
-/*
-// 3. Utilizando la cláusula reduction
-
-void fitness(const double *d, Individuo *individuo, int n, int m)
-{
-	double suma_distancias = 0.0;
-	int i, j, elem1, elem2;
-
-	#pragma omp parallel for private(i, j, elem1, elem2) shared(d, individuo, n, m) reduction(+:suma_distancias) //schedule(guided, 64)
-		for (i=0; i<m-1; i++) {
-			for (j=i+1; j<m; j++) {
-				elem1 = individuo->array_int[i];
-				elem2 = individuo->array_int[j];
-				suma_distancias += distancia_ij(d, elem1, elem2, n);
-			}
-		}
-
-	individuo->fitness = suma_distancias;
-}
-*/
-
-/*
-// Declaración de la función proporcionada en mezclar.c
-extern void mezclar(Individuo **poblacion, int izq, int med, int der);
-
-void mergeSort(Individuo **poblacion, int izq, int der) {
-	int med = (izq + der) / 2;
-	if ((der - izq) < 2) return;
-
-	// Se crean tareas independientes para cada mitad del array
-	#pragma omp task shared(poblacion)
-	mergeSort(poblacion, izq, med);
-
-	#pragma omp task shared(poblacion)
-	mergeSort(poblacion, med, der);
-
-	// Se espera a que las tareas hijas terminen antes de mezclar
-	#pragma omp taskwait
-	mezclar(poblacion, izq, med, der);
-}
-*/

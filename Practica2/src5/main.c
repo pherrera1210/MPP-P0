@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <mpi.h>
 
 #include "../include/io.h"
 
@@ -15,10 +16,14 @@ static double mseconds() {
 
 int main(int argc, char **argv)
 {
+	// inicialización del entorno MPI
+    MPI_Init(&argc, &argv);
+
 //	Check Number of Input Args
 	if(argc < 6) {
 		fprintf(stderr,"Ayuda:\n"); 
 		fprintf(stderr,"  ./programa n m nGen tamPob tamRate\n");
+		MPI_Finalize();
 		return(EXIT_FAILURE);
 	}
 	
@@ -32,36 +37,57 @@ int main(int argc, char **argv)
 	assert(m < n);
 	
 //	Generate matrix D with distance values among elements
-	double *d = read_distances(n);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	int n_dist = (n * n - n) / 2;
+	double *d;
+
+	if (rank == 0) {
+		d = read_distances(n);
+	} else {
+		d = (double *) malloc(n_dist * sizeof(double));
+		assert(d);
+	}
+	
+	MPI_Bcast(d, n_dist, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	
 	#ifdef DEBUG
-//		print_distances(d, n);
+	//	print_distances(d, n);
 	#endif
 	
-//	Allocate memory for output data
+	//	Allocate memory for output data
 	int *sol = (int *) malloc(m * sizeof(int));
 	
 	#ifdef TIME
+		// sincroniza todas las islas antes de medir
+		MPI_Barrier(MPI_COMM_WORLD); 
 		double ti = mseconds();
 	#endif
 	
-//	Call Metaheuristic
+	//	Call Metaheuristic
 	double value = aplicar_mh(d, n, m, n_gen, tam_pob, m_rate, sol);
-	
+
 	#ifdef TIME
+		// espera a que todas terminen para congelar el reloj
+		MPI_Barrier(MPI_COMM_WORLD);
 		double tf = mseconds();
-		printf("Execution Time: %.2lf sec\n", (tf - ti)/1000);
+		if (rank == 0)
+			printf("Execution Time: %.2lf sec\n", (tf - ti)/1000);
 	#endif
 	
 	
 	#ifdef DEBUG
-		print_solution(n, m, sol, value);
+		if (rank == 0)
+			print_solution(n, m, sol, value);
 	#endif
 	
 	//	Free Allocated Memory	
 	free(sol);
 
 	free(d);
+
+	// finalización del entorno MPI
+	MPI_Finalize();
 
 	return(EXIT_SUCCESS);
 }
