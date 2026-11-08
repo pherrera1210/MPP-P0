@@ -37,7 +37,19 @@ int main(int argc, char **argv)
 	assert(m < n);
 	
 //	Generate matrix D with distance values among elements
-	double *d = read_distances(n);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	int n_dist = (n * n - n) / 2;
+	double *d;
+
+	if (rank == 0) {
+		d = read_distances(n);
+	} else {
+		d = (double *) malloc(n_dist * sizeof(double));
+		assert(d);
+	}
+	
+	MPI_Bcast(d, n_dist, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	
 	#ifdef DEBUG
 	//	print_distances(d, n);
@@ -54,9 +66,6 @@ int main(int argc, char **argv)
 	
 	//	Call Metaheuristic
 	double value = aplicar_mh(d, n, m, n_gen, tam_pob, m_rate, sol);
-	
-	int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	#ifdef TIME
 		// espera a que todas terminen para congelar el reloj
