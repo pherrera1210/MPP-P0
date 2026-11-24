@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <mpi.h>
+#include <omp.h>
 #include "../include/mh.h"
 
 #define PRINT 0
@@ -16,11 +17,13 @@
 #define NGM 10 // Frecuencia de migración (cada 10 generaciones)
 #define NEM 2  // Número de individuos migrantes por isla
 
+unsigned int seed;
+#pragma omp threadprivate(seed)
 
 void crear_tipo_datos(int m, MPI_Datatype *tipo_individuo);
 
 int aleatorio(int n) {
-	return (rand() % n);  // genera un numero aleatorio entre 0 y n-1
+	return (rand_r(&seed) % n);  // genera un numero aleatorio entre 0 y n-1
 }
 
 int find_element(int *array, int end, int element)
@@ -89,9 +92,12 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
-	// para reiniciar la secuencia pseudoaleatoria en cada ejecución
-	// añadimos el rank del proceso para que cada isla tenga una secuencia diferente
-	srand(time(NULL) + getpid() + rank);
+	// Inicializa una semilla única para cada pareja
+	omp_set_dynamic(0);
+	#pragma omp parallel
+	{
+		seed = (unsigned int)(time(NULL) ^ (getpid() << 8) ^ (rank << 16) ^ omp_get_thread_num());
+	}
 	int i, g, mutation_start;
 	
 	// definimos el tipo derivado de MPI para Individuo
@@ -105,6 +111,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 	assert(poblacion);
 	
 	// crea cada individuo
+	#pragma omp parallel for private(i) schedule(static)
 	for(i = 0; i < tam_pob_isla; i++) {
 		poblacion[i] = (Individuo *) malloc(sizeof(Individuo));
 		crear_individuo(n, m, poblacion[i]->array_int);
@@ -141,6 +148,7 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 
 		// cruce local
 		// los hijos de los ascendientes mas aptos sustituyen a la ultima mitad de los individuos menos aptos
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = 0; i < (tam_pob_isla/2) - 1; i += 2) {
 			cruzar(poblacion[i], poblacion[i+1], poblacion[tam_pob_isla/2 + i], poblacion[tam_pob_isla/2 + i + 1], n, m);
 		}
@@ -148,12 +156,14 @@ double aplicar_mh(const double *d, int n, int m, int n_gen, int tam_pob, double 
 		// mutacion local
 		// inicia la mutacion a partir de 1/4 de la poblacion
 		mutation_start = tam_pob_isla / 4;
+		#pragma omp parallel for private(i) schedule(guided)
 		for(i = mutation_start; i < tam_pob_isla; i++) {
 			mutar(poblacion[i], n, m, m_rate);
 		}
 		
 		// evaluación del fitness local
 		// recalcula el fitness del individuo
+		#pragma omp parallel for private(i) schedule(static)
 		for(i = 0; i < tam_pob_isla; i++) {
 			fitness(d, poblacion[i], n, m);
 		}

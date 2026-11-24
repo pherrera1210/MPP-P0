@@ -6,7 +6,7 @@ in_file="../input/igen/in.txt"
 in_file_distances="../input/input"
 
 # Lista de hilos
-LISTA_HILOS=(1 2 3 4 5 6)
+LISTA_HILOS=(1 2 3 4 5 6 7 8)
 
 while read line ; do 
 
@@ -23,7 +23,6 @@ while read line ; do
         echo "=================================================="
 
         for hilos in "${LISTA_HILOS[@]}"; do
-            export OMP_NUM_THREADS=$hilos
             echo -n "--> Ejecutando con Hilos = $hilos: "
             
             # Pasamos HILOS=$hilos al Makefile
