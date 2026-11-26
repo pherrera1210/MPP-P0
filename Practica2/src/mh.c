@@ -13,8 +13,8 @@
 #define MAX_ITER_SIN_MEJORA 5
 
 // Parámetros de migración
-#define NGM 10 // Frecuencia de migración (cada 10 generaciones)
-#define NEM 2  // Número de individuos migrantes por isla
+#define NGM 6 // Frecuencia de migración (cada 10 generaciones)
+#define NEM 4  // Número de individuos migrantes por isla
 
 
 void crear_tipo_datos(int m, MPI_Datatype *tipo_individuo);
